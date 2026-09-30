@@ -839,9 +839,6 @@ public class CoxStoragePlannerPlugin extends Plugin implements CoxStoragePanel.A
 		return config.chestOverlay() || config.chestGlow() ? openChest : null;
 	}
 
-		return WorldPoint.fromLocalInstance(client, player.getLocalLocation()).getRegionID();
-	}
-
 	/** Whether the numbers should be the solo ones right now. */
 	private boolean solo()
 	{
