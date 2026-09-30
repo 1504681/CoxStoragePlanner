@@ -9,6 +9,7 @@ import java.util.regex.Pattern;
  * What to do at one storage unit: things to put in and things to take out, in order.
  * A line is an item name, matched from its start so "Xeric's aid" covers every dose, or a pattern
  * with * and ? like "*chinchompa", with an optional count like "Stinkhorn mushroom, 3".
+ * "Ayak or Sang* staff*" takes either; the count, if any, goes at the end and covers the lot.
  * "everything" deposits it all, "everything else" deposits whatever the take-out list doesn't keep.
  * A take-out line starting with "wear" is gear to put on, done once it's worn.
  */
@@ -32,8 +33,10 @@ public final class ChestPlan
 		public final boolean everythingElse;
 		/** A take-out that's done when the item is worn, not carried. */
 		public final boolean wear;
-		/** Compiled form of a name with wildcards, null for a plain name. */
-		private final Pattern pattern;
+		/** The names this line takes, one unless it says "A or B" (or "A | B"). */
+		private final List<String> names;
+		/** Compiled forms of the names, null for a plain name; same order as names. */
+		private final List<Pattern> patterns;
 
 		Line(String text)
 		{
@@ -77,7 +80,28 @@ public final class ChestPlan
 			this.name = name;
 			this.count = count;
 			this.counted = counted;
-			this.pattern = name.contains("*") || name.contains("?") ? glob(name) : null;
+			names = new ArrayList<>();
+			patterns = new ArrayList<>();
+			for (String alt : name.split("(?i)\\s+or\\s+|\\s*\\|\\s*"))
+			{
+				alt = alt.trim();
+				if (!alt.isEmpty())
+				{
+					names.add(alt);
+					patterns.add(alt.contains("*") || alt.contains("?") ? glob(alt) : null);
+				}
+			}
+			if (names.isEmpty())
+			{
+				names.add(name);
+				patterns.add(null);
+			}
+		}
+
+		/** Whether the line is a plain name: no wildcards, no "or". */
+		boolean plain()
+		{
+			return names.size() == 1 && patterns.get(0) == null;
 		}
 
 		private static Pattern glob(String name)
@@ -101,11 +125,16 @@ public final class ChestPlan
 			{
 				return false;
 			}
-			if (pattern != null)
+			String lower = itemName.toLowerCase(Locale.ROOT);
+			for (int i = 0; i < names.size(); i++)
 			{
-				return pattern.matcher(itemName).matches();
+				Pattern pattern = patterns.get(i);
+				if (pattern != null ? pattern.matcher(itemName).matches() : lower.startsWith(names.get(i).toLowerCase(Locale.ROOT)))
+				{
+					return true;
+				}
 			}
-			return itemName.toLowerCase(Locale.ROOT).startsWith(name.toLowerCase(Locale.ROOT));
+			return false;
 		}
 
 		@Override
@@ -197,7 +226,7 @@ public final class ChestPlan
 
 	/**
 	 * Adds to or takes from the line for an item, keeping the count in the "Name, N" suffix.
-	 * Only a plain line for the item's base name is touched, never a wildcard; the line is
+	 * Only a plain line for the item's base name is touched, never a wildcard or an "or"; the line is
 	 * added at the end when there is none and dropped when its count reaches zero.
 	 *
 	 * @return whether the lines changed
@@ -208,7 +237,7 @@ public final class ChestPlan
 		for (int i = 0; i < lines.size(); i++)
 		{
 			Line line = new Line(lines.get(i));
-			if (line.pattern == null && !line.everything && line.name.equalsIgnoreCase(name))
+			if (line.plain() && !line.everything && line.name.equalsIgnoreCase(name))
 			{
 				int count = line.count + delta;
 				if (count <= 0)
