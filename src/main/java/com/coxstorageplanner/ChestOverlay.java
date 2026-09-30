@@ -15,20 +15,27 @@ class ChestOverlay extends OverlayPanel
 	private static final Color DONE = new Color(110, 200, 110);
 	private static final Color NEXT = new Color(255, 220, 90);
 	private static final Color TODO = Color.WHITE;
+	private static final Color SKIPPED = new Color(160, 160, 160);
 
 	private final CoxStoragePlannerPlugin plugin;
+	private final CoxStoragePlannerConfig config;
 
 	@Inject
-	ChestOverlay(CoxStoragePlannerPlugin plugin)
+	ChestOverlay(CoxStoragePlannerPlugin plugin, CoxStoragePlannerConfig config)
 	{
 		super(plugin);
 		this.plugin = plugin;
+		this.config = config;
 		setPosition(OverlayPosition.TOP_LEFT);
 	}
 
 	@Override
 	public Dimension render(Graphics2D graphics)
 	{
+		if (!config.chestOverlay())
+		{
+			return null;
+		}
 		ChestProgress progress = plugin.getOpenChest();
 		if (progress == null || (progress.wears.isEmpty() && progress.deposits.isEmpty() && progress.withdrawals.isEmpty()))
 		{
@@ -64,8 +71,8 @@ class ChestOverlay extends OverlayPanel
 
 	private int line(Graphics2D graphics, String left, ChestProgress.Step step, boolean next)
 	{
-		String right = (step.done ? "✓ " : "") + step.line.text;
-		Color color = step.done ? DONE : next ? NEXT : TODO;
+		String right = (step.missing ? "– " : step.done ? "✓ " : "") + step.line.text + (step.missing ? " (not here)" : "");
+		Color color = step.missing ? SKIPPED : step.done ? DONE : next ? NEXT : TODO;
 		panelComponent.getChildren().add(LineComponent.builder()
 			.left(left)
 			.leftColor(color)

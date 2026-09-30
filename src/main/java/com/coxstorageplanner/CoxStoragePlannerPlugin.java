@@ -796,12 +796,12 @@ public class CoxStoragePlannerPlugin extends Plugin implements CoxStoragePanel.A
 		openChest = new ChestProgress(plan, items, worn, before, tally(storage), config.chestPutBack());
 	}
 
-	/** Item name to quantity for a container, empty for one the client hasn't seen. */
+	/** Item name to quantity for a container, null for one the client hasn't seen. */
 	private Map<String, Integer> tally(ItemContainer container)
 	{
 		if (container == null)
 		{
-			return Collections.emptyMap();
+			return null;
 		}
 		Map<String, Integer> items = new LinkedHashMap<>();
 		for (Item item : container.getItems())
@@ -891,6 +891,14 @@ public class CoxStoragePlannerPlugin extends Plugin implements CoxStoragePanel.A
 		Supplies carriedSupplies = carried == null ? Supplies.EMPTY : count(carried.getItems());
 		Map<String, Integer> items = tally(carried);
 		Map<String, Integer> worn = tally(client.getItemContainer(InventoryID.WORN));
+		if (items == null)
+		{
+			items = Collections.emptyMap();
+		}
+		if (worn == null)
+		{
+			worn = Collections.emptyMap();
+		}
 		synchronized (lock)
 		{
 			inventory = carriedSupplies;

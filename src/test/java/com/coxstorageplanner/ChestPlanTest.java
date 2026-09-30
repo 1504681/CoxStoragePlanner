@@ -4,6 +4,7 @@ import com.google.gson.Gson;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNull;
+import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertTrue;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -186,13 +187,57 @@ public class ChestPlanTest
 		Map<String, Integer> carried = ChestProgress.tally(Arrays.asList("Xeric's aid(4)", "Overload (+)(4)"));
 		Map<String, Integer> worn = ChestProgress.tally(Arrays.asList("Scythe of vitur"));
 		Map<String, Integer> none = Collections.emptyMap();
-		ChestProgress progress = new ChestProgress(plan, carried, worn, carried, none);
+		ChestProgress progress = new ChestProgress(plan, carried, worn, carried, null);
 		assertTrue(progress.withdrawals.get(0).done);
 		assertTrue(progress.withdrawals.get(1).done);
 		assertTrue(progress.withdrawals.get(2).done);
 		assertFalse(progress.withdrawals.get(3).done);
 		assertEquals(4, progress.next().order);
-		assertFalse(new ChestProgress(plan, carried, none, carried, none).withdrawals.get(0).done);
+		assertFalse(new ChestProgress(plan, carried, none, carried, null).withdrawals.get(0).done);
+	}
+
+	@Test
+	public void stepsWithNothingToTakeAreSkipped()
+	{
+		ChestPlan plan = new ChestPlan("RAIDS_END#2", "End 2");
+		plan.getWithdraw().addAll(Arrays.asList("Ayak", "Xeric's aid, 2", "Overload"));
+		plan.setOrdered(true);
+		Map<String, Integer> carried = Collections.emptyMap();
+		Map<String, Integer> storage = ChestProgress.tally(Arrays.asList("Xeric's aid(4)", "Overload (+)(4)"));
+		ChestProgress progress = new ChestProgress(plan, carried, carried, carried, storage);
+		assertTrue(progress.withdrawals.get(0).missing);
+		assertTrue(progress.withdrawals.get(0).done);
+		assertFalse(progress.withdrawals.get(1).missing);
+		assertEquals(2, progress.next().order);
+		// only one aid there: taking it makes the step done for lack of any more
+		Map<String, Integer> oneOut = ChestProgress.tally(Arrays.asList("Xeric's aid(4)"));
+		ChestProgress after = new ChestProgress(plan, oneOut, carried, carried, ChestProgress.tally(Arrays.asList("Overload (+)(4)")));
+		assertTrue(after.withdrawals.get(1).missing);
+		assertEquals(3, after.next().order);
+		// a storage the client hasn't seen skips nothing
+		ChestProgress unseen = new ChestProgress(plan, carried, carried, carried, null);
+		assertFalse(unseen.withdrawals.get(0).missing);
+		assertEquals(1, unseen.next().order);
+	}
+
+	@Test
+	public void fullestPotionLightsFirst()
+	{
+		ChestPlan plan = new ChestPlan("RAIDS_END#2", "End 2");
+		plan.getWithdraw().addAll(Arrays.asList("Xeric's aid, 2"));
+		plan.setOrdered(true);
+		Map<String, Integer> none = Collections.emptyMap();
+		Map<String, Integer> storage = ChestProgress.tally(Arrays.asList("Xeric's aid(2)", "Xeric's aid(4)", "Xeric's aid(3)"));
+		ChestProgress progress = new ChestProgress(plan, none, none, none, storage);
+		assertNotNull(progress.highlightsWithdraw("Xeric's aid(4)", 3));
+		assertNull(progress.highlightsWithdraw("Xeric's aid(3)", 3));
+		assertNull(progress.highlightsWithdraw("Xeric's aid(2)", 3));
+		Map<String, Integer> no4s = ChestProgress.tally(Arrays.asList("Xeric's aid(2)", "Xeric's aid(3)"));
+		ChestProgress later = new ChestProgress(plan, ChestProgress.tally(Arrays.asList("Xeric's aid(4)")), none, none, no4s);
+		assertNotNull(later.highlightsWithdraw("Xeric's aid(3)", 3));
+		assertNull(later.highlightsWithdraw("Xeric's aid(2)", 3));
+		assertEquals(-1, ChestProgress.dose("Scythe of vitur"));
+		assertEquals(4, ChestProgress.dose("Overload (+)(4)"));
 	}
 
 	@Test
@@ -219,7 +264,7 @@ public class ChestPlanTest
 
 		// nothing worn yet: only the gear lights, wherever it is
 		Map<String, Integer> carried = ChestProgress.tally(Arrays.asList("Infernal cape", "Bronze dagger", "Xeric's aid(4)"));
-		ChestProgress progress = new ChestProgress(plan, carried, none, carried, none);
+		ChestProgress progress = new ChestProgress(plan, carried, none, carried, null);
 		assertEquals(ChestProgress.Phase.WEAR, progress.phase());
 		assertTrue(progress.highlightsWear("Scythe of vitur"));
 		assertTrue(progress.highlightsWear("Infernal cape"));
@@ -232,7 +277,7 @@ public class ChestPlanTest
 		// worn: the dagger has to go, the aid stays
 		Map<String, Integer> worn = ChestProgress.tally(Arrays.asList("Scythe of vitur", "Infernal cape"));
 		carried = ChestProgress.tally(Arrays.asList("Bronze dagger", "Xeric's aid(4)"));
-		progress = new ChestProgress(plan, carried, worn, carried, none);
+		progress = new ChestProgress(plan, carried, worn, carried, null);
 		assertEquals(ChestProgress.Phase.DEPOSIT, progress.phase());
 		assertFalse(progress.highlightsWear("Scythe of vitur"));
 		assertTrue(progress.highlightsDeposit("Bronze dagger"));
@@ -241,7 +286,7 @@ public class ChestPlanTest
 
 		// dagger gone: now the ordered take-out, and the aid already counts once
 		carried = ChestProgress.tally(Arrays.asList("Xeric's aid(4)"));
-		progress = new ChestProgress(plan, carried, worn, carried, none);
+		progress = new ChestProgress(plan, carried, worn, carried, null);
 		assertEquals(ChestProgress.Phase.WITHDRAW, progress.phase());
 		assertTrue(progress.deposits.get(0).done);
 		assertEquals(1, progress.highlightsWithdraw("Xeric's aid(4)", 3).order);
@@ -249,7 +294,7 @@ public class ChestPlanTest
 		assertFalse(progress.isDone());
 
 		carried = ChestProgress.tally(Arrays.asList("Xeric's aid(4)", "Xeric's aid(4)", "Overload (+)(4)"));
-		assertTrue(new ChestProgress(plan, carried, worn, carried, none).isDone());
+		assertTrue(new ChestProgress(plan, carried, worn, carried, null).isDone());
 	}
 
 	@Test
@@ -298,7 +343,7 @@ public class ChestPlanTest
 
 		// the enhance is carried before the aid and the overload: back in it goes
 		Map<String, Integer> carried = ChestProgress.tally(Arrays.asList("Xeric's aid(4)", "Prayer enhance(4)"));
-		ChestProgress progress = new ChestProgress(plan, carried, none, carried, none, true);
+		ChestProgress progress = new ChestProgress(plan, carried, none, carried, null, true);
 		assertEquals(Arrays.asList("Prayer enhance(4)"), progress.outOfOrder);
 		assertEquals(ChestProgress.Phase.DEPOSIT, progress.phase());
 		assertTrue(progress.highlightsDeposit("Prayer enhance(4)"));
@@ -306,19 +351,19 @@ public class ChestPlanTest
 		assertNull(progress.highlightsWithdraw("Xeric's aid(4)", 3));
 
 		// with the setting off it's just the plan as written
-		ChestProgress loose = new ChestProgress(plan, carried, none, carried, none, false);
+		ChestProgress loose = new ChestProgress(plan, carried, none, carried, null, false);
 		assertTrue(loose.outOfOrder.isEmpty());
 		assertEquals(1, loose.highlightsWithdraw("Xeric's aid(4)", 3).order);
 
 		// put back: the next step lights again
 		carried = ChestProgress.tally(Arrays.asList("Xeric's aid(4)"));
-		progress = new ChestProgress(plan, carried, none, carried, none, true);
+		progress = new ChestProgress(plan, carried, none, carried, null, true);
 		assertTrue(progress.outOfOrder.isEmpty());
 		assertEquals(1, progress.highlightsWithdraw("Xeric's aid(4)", 3).order);
 
 		// the item of the next step, or of a done one, is never out of order
 		carried = ChestProgress.tally(Arrays.asList("Xeric's aid(4)", "Xeric's aid(4)", "Overload (+)(4)"));
-		assertTrue(new ChestProgress(plan, carried, none, carried, none, true).outOfOrder.isEmpty());
+		assertTrue(new ChestProgress(plan, carried, none, carried, null, true).outOfOrder.isEmpty());
 	}
 
 	@Test

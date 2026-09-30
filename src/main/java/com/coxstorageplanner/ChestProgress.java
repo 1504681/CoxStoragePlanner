@@ -14,9 +14,11 @@ import java.util.regex.Pattern;
  * number, when that many went in since the storage was opened or are already in it; "everything else"
  * is done when nothing is carried that the take-out list doesn't keep. A withdrawal is done when the
  * inventory and worn equipment together hold the number asked for; the same item on a later line asks
- * for that many more. A "wear" line is done once it's worn. With putBack, an ordered plan also wants
- * anything carried that belongs to a later step put back first, so it can come out in its place.
- * Numbers are quantities, so a stack of 14 juice counts as 14. Containers are maps of item name to quantity.
+ * for that many more; one whose item is nowhere, not on you and not in the storage, is skipped. A "wear"
+ * line is done once it's worn. With putBack, an ordered plan also wants anything carried that belongs
+ * to a later step put back first, so it can come out in its place. Potions light up fullest first.
+ * Numbers are quantities, so a stack of 14 juice counts as 14. Containers are maps of item name to quantity;
+ * a null storage is one the client hasn't seen, so nothing is skipped for not being in it.
  */
 public final class ChestProgress
 {
@@ -27,13 +29,21 @@ public final class ChestProgress
 		public final boolean done;
 		/** Position in the withdraw order, 1-based, 0 for deposits. */
 		public final int order;
+		/** A withdrawal skipped because the item is neither on you nor in the storage; done as well. */
+		public final boolean missing;
 
 		Step(ChestPlan.Line line, boolean deposit, boolean done, int order)
+		{
+			this(line, deposit, done, order, false);
+		}
+
+		Step(ChestPlan.Line line, boolean deposit, boolean done, int order, boolean missing)
 		{
 			this.line = line;
 			this.deposit = deposit;
 			this.done = done;
 			this.order = order;
+			this.missing = missing;
 		}
 	}
 
@@ -49,10 +59,12 @@ public final class ChestProgress
 	public final List<Step> withdrawals;
 	/** Carried items that belong to a later step of an ordered plan, to put back before taking out. */
 	public final List<String> outOfOrder;
+	/** What the storage holds, null when the client hasn't seen it. */
+	private final Map<String, Integer> storage;
 
 	public ChestProgress(ChestPlan plan, Map<String, Integer> inventory)
 	{
-		this(plan, inventory, Collections.emptyMap(), inventory, Collections.emptyMap());
+		this(plan, inventory, Collections.emptyMap(), inventory, null);
 	}
 
 	public ChestProgress(ChestPlan plan, Map<String, Integer> inventory, Map<String, Integer> openedWith, Map<String, Integer> storage)
@@ -63,7 +75,7 @@ public final class ChestProgress
 	/**
 	 * @param worn what's equipped, which counts as withdrawn too so gear you put on stays ticked off
 	 * @param openedWith the inventory when the storage was opened
-	 * @param storage what the storage holds now
+	 * @param storage what the storage holds now, null if the client hasn't seen it
 	 */
 	public ChestProgress(ChestPlan plan, Map<String, Integer> inventory, Map<String, Integer> worn,
 		Map<String, Integer> openedWith, Map<String, Integer> storage)
@@ -76,6 +88,8 @@ public final class ChestProgress
 		Map<String, Integer> openedWith, Map<String, Integer> storage, boolean putBack)
 	{
 		this.plan = plan;
+		this.storage = storage;
+		Map<String, Integer> held = storage == null ? Collections.emptyMap() : storage;
 		List<ChestPlan.Line> takeOut = ChestPlan.parse(plan.getWithdraw());
 		List<Step> wears = new ArrayList<>();
 		for (ChestPlan.Line line : takeOut)
@@ -101,7 +115,7 @@ public final class ChestProgress
 			{
 				int left = count(line, inventory);
 				done = left == 0 || (line.counted
-					&& (count(line, openedWith) - left >= line.count || count(line, storage) >= line.count));
+					&& (count(line, openedWith) - left >= line.count || count(line, held) >= line.count));
 			}
 			deposits.add(new Step(line, true, done, 0));
 		}
@@ -117,7 +131,9 @@ public final class ChestProgress
 			// "Xeric's aid" twice means two of them
 			int need = asked.merge(line.name.toLowerCase(Locale.ROOT), line.count, Integer::sum);
 			boolean done = count(line, inventory) + count(line, worn) >= need;
-			withdrawals.add(new Step(line, false, done, ++order));
+			// nowhere to get it from: skip the step rather than wait on it forever
+			boolean missing = !done && storage != null && count(line, storage) == 0;
+			withdrawals.add(new Step(line, false, done || missing, ++order, missing));
 		}
 		List<String> outOfOrder = new ArrayList<>();
 		if (putBack && plan.isOrdered())
@@ -329,7 +345,8 @@ public final class ChestProgress
 
 	/**
 	 * The withdrawal step an item in the storage belongs to and hasn't been done, or null.
-	 * With an ordered plan only the next {@code limit} steps still to do count.
+	 * With an ordered plan only the next {@code limit} steps still to do count. Of the potions
+	 * in the storage a step matches only the fullest lights up, so a 3-dose waits until the 4s are gone.
 	 */
 	public Step highlightsWithdraw(String itemName, int limit)
 	{
@@ -350,11 +367,36 @@ public final class ChestProgress
 			}
 			if (step.line.matches(itemName))
 			{
-				return step;
+				return fullest(step.line, itemName) ? step : null;
 			}
 			rank++;
 		}
 		return null;
+	}
+
+	/** Whether no fuller dose of this potion is in the storage; true for anything that isn't a potion. */
+	private boolean fullest(ChestPlan.Line line, String itemName)
+	{
+		int dose = dose(itemName);
+		if (dose < 0 || storage == null)
+		{
+			return true;
+		}
+		for (String other : storage.keySet())
+		{
+			if (dose(other) > dose && line.matches(other))
+			{
+				return false;
+			}
+		}
+		return true;
+	}
+
+	/** The N of a "(N)" dose suffix, -1 without one. */
+	static int dose(String itemName)
+	{
+		java.util.regex.Matcher m = DOSES.matcher(itemName);
+		return m.find() ? itemName.charAt(m.start() + 1) - '0' : -1;
 	}
 
 	/** How many withdrawals still to do come before this one: 0 for the next one. */

@@ -570,7 +570,7 @@ class CoxStoragePanel extends PluginPanel
 		{
 			ChestProgress progress = state.openChest != null && state.openChest.plan.getKey().equals(plan.getKey())
 				? state.openChest
-				: new ChestProgress(plan, state.carriedItems, state.wornItems, state.carriedItems, Collections.emptyMap(), state.putBack);
+				: new ChestProgress(plan, state.carriedItems, state.wornItems, state.carriedItems, null, state.putBack);
 			ChestProgress.Step next = progress.next();
 			for (ChestProgress.Step step : progress.wears)
 			{
@@ -586,9 +586,10 @@ class CoxStoragePanel extends PluginPanel
 			}
 			for (ChestProgress.Step step : progress.withdrawals)
 			{
-				String prefix = step.done ? "✓ " : step == next ? "→ " : "• ";
-				chestSteps.addRow(small(prefix + (plan.isOrdered() ? step.order + ". " : "out: ") + step.line.text,
-					step.done ? GOOD : step == next ? WARN : Color.WHITE), 0);
+				String prefix = step.missing ? "– " : step.done ? "✓ " : step == next ? "→ " : "• ";
+				chestSteps.addRow(small(prefix + (plan.isOrdered() ? step.order + ". " : "out: ") + step.line.text
+					+ (step.missing ? " (not here)" : ""),
+					step.missing ? MUTED : step.done ? GOOD : step == next ? WARN : Color.WHITE), 0);
 			}
 		}
 	}
