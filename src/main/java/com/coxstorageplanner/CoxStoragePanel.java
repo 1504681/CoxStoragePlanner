@@ -629,8 +629,11 @@ class CoxStoragePanel extends PluginPanel
 				+ (state.countSplit ? "" : " (not counted)");
 			JLabel detail = detailLabels.get(potion);
 			detail.setText(inventory + "  " + stored);
-			moreLabels.get(potion).setText(shared + (state.countShared ? "" : " (not counted)"));
+			// the shared line only earns its row when it counts
+			moreLabels.get(potion).setText(shared);
+			moreLabels.get(potion).setVisible(state.countShared);
 			detail.setToolTipText("<html>" + inventory + "<br>" + stored + "<br>" + shared + split
+				+ (state.countShared ? "" : "<br>shared storage isn't counted (setting)")
 				+ "<br><br>? means the storage hasn't been opened this raid</html>");
 			label.setToolTipText(detail.getToolTipText());
 			moreLabels.get(potion).setToolTipText(detail.getToolTipText());
