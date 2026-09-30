@@ -255,7 +255,7 @@ public class ChestPlanTest
 	@Test
 	public void eitherOfTwoNamesWillDo()
 	{
-		ChestPlan.Line line = ChestPlan.parse(Arrays.asList("Ayak or Sang* staff*, 1")).get(0);
+		ChestPlan.Line line = ChestPlan.parse(Arrays.asList("Ayak | Sang* staff*, 1")).get(0);
 		assertEquals(1, line.count);
 		assertTrue(line.counted);
 		assertTrue(line.matches("Sanguinesti staff"));
@@ -265,12 +265,12 @@ public class ChestPlanTest
 		assertTrue(pipe.wear);
 		assertTrue(pipe.matches("Neitiznot faceguard"));
 		assertTrue(pipe.matches("Torva full helm"));
-		// "or" inside a name is still just the name
-		assertTrue(ChestPlan.parse(Arrays.asList("Torment")).get(0).matches("Tormented bracelet"));
-		// marking never edits an "or" line
-		java.util.List<String> lines = new java.util.ArrayList<>(Arrays.asList("Ayak or Sang* staff*"));
+		// "or" is just a word, not a choice
+		assertFalse(ChestPlan.parse(Arrays.asList("Ayak or Sang* staff*")).get(0).matches("Sanguinesti staff"));
+		// marking never edits an "A | B" line
+		java.util.List<String> lines = new java.util.ArrayList<>(Arrays.asList("Ayak | Sang* staff*"));
 		assertTrue(ChestPlan.mark(lines, "Sanguinesti staff", 1));
-		assertEquals(Arrays.asList("Ayak or Sang* staff*", "Sanguinesti staff"), lines);
+		assertEquals(Arrays.asList("Ayak | Sang* staff*", "Sanguinesti staff"), lines);
 	}
 
 	@Test

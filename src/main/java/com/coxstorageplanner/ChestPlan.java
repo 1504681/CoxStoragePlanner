@@ -9,7 +9,7 @@ import java.util.regex.Pattern;
  * What to do at one storage unit: things to put in and things to take out, in order.
  * A line is an item name, matched from its start so "Xeric's aid" covers every dose, or a pattern
  * with * and ? like "*chinchompa", with an optional count like "Stinkhorn mushroom, 3".
- * "Ayak or Sang* staff*" takes either; the count, if any, goes at the end and covers the lot.
+ * "Ayak | Sang* staff*" takes either; the count, if any, goes at the end and covers the lot.
  * "everything" deposits it all, "everything else" deposits whatever the take-out list doesn't keep.
  * A take-out line starting with "wear" is gear to put on, done once it's worn.
  */
@@ -33,7 +33,7 @@ public final class ChestPlan
 		public final boolean everythingElse;
 		/** A take-out that's done when the item is worn, not carried. */
 		public final boolean wear;
-		/** The names this line takes, one unless it says "A or B" (or "A | B"). */
+		/** The names this line takes, one unless it says "A | B". */
 		private final List<String> names;
 		/** Compiled forms of the names, null for a plain name; same order as names. */
 		private final List<Pattern> patterns;
@@ -82,7 +82,7 @@ public final class ChestPlan
 			this.counted = counted;
 			names = new ArrayList<>();
 			patterns = new ArrayList<>();
-			for (String alt : name.split("(?i)\\s+or\\s+|\\s*\\|\\s*"))
+			for (String alt : name.split("\\s*\\|\\s*"))
 			{
 				alt = alt.trim();
 				if (!alt.isEmpty())
@@ -98,7 +98,7 @@ public final class ChestPlan
 			}
 		}
 
-		/** Whether the line is a plain name: no wildcards, no "or". */
+		/** Whether the line is a plain name: no wildcards, no "|". */
 		boolean plain()
 		{
 			return names.size() == 1 && patterns.get(0) == null;
@@ -226,7 +226,7 @@ public final class ChestPlan
 
 	/**
 	 * Adds to or takes from the line for an item, keeping the count in the "Name, N" suffix.
-	 * Only a plain line for the item's base name is touched, never a wildcard or an "or"; the line is
+	 * Only a plain line for the item's base name is touched, never a wildcard or an "A | B"; the line is
 	 * added at the end when there is none and dropped when its count reaches zero.
 	 *
 	 * @return whether the lines changed
