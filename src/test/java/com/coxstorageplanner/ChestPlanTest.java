@@ -150,4 +150,30 @@ public class ChestPlanTest
 		assertTrue(ChestBook.isUnset(""));
 		assertFalse(ChestBook.isUnset("[]"));
 	}
+
+	/** An instance template chunk the way the client packs it. */
+	private static int chunk(int templateX, int templateY, int plane)
+	{
+		return plane << 24 | (templateX / 8) << 14 | (templateY / 8) << 3;
+	}
+
+	@Test
+	public void roomsComeFromTheTemplateChunk()
+	{
+		assertEquals("RAIDS_END", CoxStoragePlannerPlugin.roomType(chunk(3264, 5152, 0)));
+		// the End room that leads down to Olm sits past the width the API gives End
+		assertEquals("RAIDS_END", CoxStoragePlannerPlugin.roomType(chunk(3264 + 72, 5152 + 16, 0)));
+		assertEquals("RAIDS_FARMING", CoxStoragePlannerPlugin.roomType(chunk(3264, 5440, 0)));
+		assertEquals("RAIDS_FARMING", CoxStoragePlannerPlugin.roomType(chunk(3264 + 40, 5440 + 8, 1)));
+		assertEquals("RAIDS_TIGHTROPE", CoxStoragePlannerPlugin.roomType(chunk(3264, 5344, 1)));
+		assertEquals("RAIDS_VESPULA", CoxStoragePlannerPlugin.roomType(chunk(3264, 5280, 2)));
+		assertNull(CoxStoragePlannerPlugin.roomType(chunk(3264, 5184, 0)));
+		assertNull(CoxStoragePlannerPlugin.roomType(chunk(3264 + 96, 5152, 0)));
+		assertNull(CoxStoragePlannerPlugin.roomType(-1));
+		assertEquals("End 2", CoxStoragePlannerPlugin.chestName("RAIDS_END#2"));
+		assertEquals("Farming 1", CoxStoragePlannerPlugin.chestName("RAIDS_FARMING#1"));
+		assertEquals("Ice Demon", CoxStoragePlannerPlugin.chestName("RAIDS_ICE_DEMON#1"));
+		assertEquals(1, CoxStoragePlannerPlugin.floor(3));
+		assertEquals(2, CoxStoragePlannerPlugin.floor(2));
+	}
 }

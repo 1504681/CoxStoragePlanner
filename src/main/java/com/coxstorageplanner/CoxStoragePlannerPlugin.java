@@ -16,10 +16,10 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 import javax.inject.Inject;
+import lombok.extern.slf4j.Slf4j;
 import javax.swing.SwingUtilities;
 import net.runelite.api.ChatMessageType;
 import net.runelite.api.Client;
-import net.runelite.api.InstanceTemplates;
 import net.runelite.api.Item;
 import net.runelite.api.ItemContainer;
 import net.runelite.api.MenuAction;
@@ -56,6 +56,7 @@ import net.runelite.client.ui.ClientToolbar;
 import net.runelite.client.ui.NavigationButton;
 import net.runelite.client.ui.overlay.OverlayManager;
 
+@Slf4j
 @PluginDescriptor(
 	name = "CoX Storage Planner",
 	description = "Plan what to put in and take out of each Chambers of Xeric storage unit, and track the doses you need for Olm",
@@ -123,6 +124,8 @@ public class CoxStoragePlannerPlugin extends Plugin implements CoxStoragePanel.A
 	/** Rooms seen this raid: room slot to chest key, to tell the two farming rooms apart. */
 	private final Map<String, String> roomKeys = new LinkedHashMap<>();
 	private String lastRoomSlot;
+	/** Template chunks inside the raid the room table didn't know, logged once each. */
+	private final Set<Integer> unknownChunks = new HashSet<>();
 	private final Map<Integer, String> itemNames = new HashMap<>();
 	/** While on, left-clicking an item in a storage or the inventory adds it to the chest's lists. */
 	private volatile boolean marking;
@@ -572,16 +575,22 @@ public class CoxStoragePlannerPlugin extends Plugin implements CoxStoragePanel.A
 			currentChest = null;
 			return;
 		}
-		InstanceTemplates template = InstanceTemplates.findMatch(chunks[plane][chunkX][chunkY]);
-		if (template == null || !template.name().startsWith("RAIDS_") || template == InstanceTemplates.RAIDS_LOBBY)
+		int chunk = chunks[plane][chunkX][chunkY];
+		String room = roomType(chunk);
+		if (room == null)
 		{
+			if (chunk != -1 && inRaid && unknownChunks.add(chunk))
+			{
+				// so a room the table misses can be reported from the client log
+				log.info("unknown raid room: template x={} y={} plane={} at plane {}", (chunk >> 14 & 0x3FF) * 8,
+					(chunk >> 3 & 0x7FF) * 8, chunk >> 24 & 3, plane);
+			}
 			currentChest = null;
 			return;
 		}
 		WorldPoint world = player.getWorldLocation();
 		int slotX = Math.floorDiv(world.getX(), 32);
 		int slotY = Math.floorDiv(world.getY(), 32);
-		String room = roomType(template);
 		String slot = room + ":" + slotX + ":" + slotY + ":" + world.getPlane();
 		String key = roomKeys.get(slot);
 		if (key == null)
@@ -636,11 +645,50 @@ public class CoxStoragePlannerPlugin extends Plugin implements CoxStoragePanel.A
 		return plane == 3 ? 1 : plane == 2 ? 2 : 0;
 	}
 
-	/** RAIDS_FARMING2 is a second layout of the farming room, not a second kind of room, so both count as RAIDS_FARMING. */
-	static String roomType(InstanceTemplates template)
+	/**
+	 * The raid's room templates: template y and plane to room, from the API's InstanceTemplates. Every room is
+	 * 96 tiles wide in the template (the API has End at 64, which misses the End room that leads down to
+	 * Olm), and the second layouts of the farming and scavenger rooms are the same room.
+	 */
+	private static final Map<Integer, String> ROOMS = new HashMap<>();
+
+	static
 	{
-		String name = template.name();
-		return name.endsWith("2") ? name.substring(0, name.length() - 1) : name;
+		ROOMS.put(5696, "RAIDS_START");
+		ROOMS.put(5152, "RAIDS_END");
+		ROOMS.put(5216, "RAIDS_SCAVENGERS");
+		ROOMS.put(5248, "RAIDS_SHAMANS");
+		ROOMS.put(5280, "RAIDS_VASA");
+		ROOMS.put(5312, "RAIDS_VANGUARDS");
+		ROOMS.put(5344, "RAIDS_ICE_DEMON");
+		ROOMS.put(5376, "RAIDS_THIEVING");
+		ROOMS.put(5440, "RAIDS_FARMING");
+		ROOMS.put(5216 + (1 << 16), "RAIDS_SCAVENGERS");
+		ROOMS.put(5312 + (1 << 16), "RAIDS_MUTTADILES");
+		ROOMS.put(5248 + (1 << 16), "RAIDS_MYSTICS");
+		ROOMS.put(5280 + (1 << 16), "RAIDS_TEKTON");
+		ROOMS.put(5344 + (1 << 16), "RAIDS_TIGHTROPE");
+		ROOMS.put(5440 + (1 << 16), "RAIDS_FARMING");
+		ROOMS.put(5248 + (2 << 16), "RAIDS_GUARDIANS");
+		ROOMS.put(5280 + (2 << 16), "RAIDS_VESPULA");
+		ROOMS.put(5344 + (2 << 16), "RAIDS_CRABS");
+	}
+
+	/** The room an instance template chunk belongs to, null outside the raid's rooms (and for the lobby). */
+	static String roomType(int chunk)
+	{
+		if (chunk == -1)
+		{
+			return null;
+		}
+		int templateY = (chunk >> 3 & 0x7FF) * 8;
+		int templateX = (chunk >> 14 & 0x3FF) * 8;
+		int templatePlane = chunk >> 24 & 3;
+		if (templateX < 3264 || templateX >= 3264 + 96)
+		{
+			return null;
+		}
+		return ROOMS.get((templateY & ~31) + (templatePlane << 16));
 	}
 
 	/** Moves chests saved under the old per-layout keys (RAIDS_FARMING2#1) to the room's key, dropping them if it's taken. */
