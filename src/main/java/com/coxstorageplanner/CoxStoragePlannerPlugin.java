@@ -184,6 +184,7 @@ public class CoxStoragePlannerPlugin extends Plugin implements CoxStoragePanel.A
 		else
 		{
 			chests = ChestBook.parse(config.chests(), gson);
+			migrateChestKeys();
 		}
 
 		panel = new CoxStoragePanel(this, (label, itemId) -> itemManager.getImage(itemId).addTo(label));
@@ -349,12 +350,12 @@ public class CoxStoragePlannerPlugin extends Plugin implements CoxStoragePanel.A
 			if (group == InterfaceID.RAIDS_STORAGE_PRIVATE || group == InterfaceID.RAIDS_STORAGE_SHARED)
 			{
 				deposit = false;
-				key = currentChest;
+				key = activeChest();
 			}
 			else if (group == InterfaceID.RAIDS_STORAGE_SIDE)
 			{
 				deposit = true;
-				key = currentChest;
+				key = activeChest();
 			}
 			else if (group == InterfaceID.INVENTORY && openStorage == 0)
 			{
@@ -580,12 +581,13 @@ public class CoxStoragePlannerPlugin extends Plugin implements CoxStoragePanel.A
 		WorldPoint world = player.getWorldLocation();
 		int slotX = Math.floorDiv(world.getX(), 32);
 		int slotY = Math.floorDiv(world.getY(), 32);
-		String slot = template.name() + ":" + slotX + ":" + slotY + ":" + world.getPlane();
+		String room = roomType(template);
+		String slot = room + ":" + slotX + ":" + slotY + ":" + world.getPlane();
 		String key = roomKeys.get(slot);
 		if (key == null)
 		{
 			// the same room type next door is the same room across a square's edge
-			if (lastRoomSlot != null && lastRoomSlot.startsWith(template.name() + ":"))
+			if (lastRoomSlot != null && lastRoomSlot.startsWith(room + ":"))
 			{
 				String[] parts = lastRoomSlot.split(":");
 				if (Math.abs(Integer.parseInt(parts[1]) - slotX) <= 1 && Math.abs(Integer.parseInt(parts[2]) - slotY) <= 1
@@ -599,12 +601,12 @@ public class CoxStoragePlannerPlugin extends Plugin implements CoxStoragePanel.A
 				int n = 1;
 				for (String seen : new HashSet<>(roomKeys.values()))
 				{
-					if (seen.startsWith(template.name() + "#"))
+					if (seen.startsWith(room + "#"))
 					{
 						n++;
 					}
 				}
-				key = template.name() + "#" + n;
+				key = room + "#" + n;
 			}
 			roomKeys.put(slot, key);
 		}
@@ -618,7 +620,41 @@ public class CoxStoragePlannerPlugin extends Plugin implements CoxStoragePanel.A
 
 	/** Room templates a Challenge Mode raid has more than one of, so the first is "End 1" not "End". */
 	private static final Set<String> REPEATED_ROOMS = new HashSet<>(Arrays.asList(
-		"RAIDS_END", "RAIDS_FARMING", "RAIDS_FARMING2", "RAIDS_SCAVENGERS", "RAIDS_SCAVENGERS2"));
+		"RAIDS_END", "RAIDS_FARMING", "RAIDS_SCAVENGERS"));
+
+	/** RAIDS_FARMING2 is a second layout of the farming room, not a second kind of room, so both count as RAIDS_FARMING. */
+	static String roomType(InstanceTemplates template)
+	{
+		String name = template.name();
+		return name.endsWith("2") ? name.substring(0, name.length() - 1) : name;
+	}
+
+	/** Moves chests saved under the old per-layout keys (RAIDS_FARMING2#1) to the room's key, dropping them if it's taken. */
+	private void migrateChestKeys()
+	{
+		boolean changed = false;
+		for (ChestPlan plan : chests.all())
+		{
+			String[] parts = plan.getKey().split("#", 2);
+			if (parts.length == 2 && parts[0].endsWith("2"))
+			{
+				String key = parts[0].substring(0, parts[0].length() - 1) + "#" + parts[1];
+				chests.remove(plan.getKey());
+				if (chests.get(key) == null)
+				{
+					ChestPlan moved = chests.getOrCreate(key, chestName(key));
+					moved.getDeposit().addAll(plan.getDeposit());
+					moved.getWithdraw().addAll(plan.getWithdraw());
+					moved.setOrdered(plan.isOrdered());
+				}
+				changed = true;
+			}
+		}
+		if (changed)
+		{
+			saveChests();
+		}
+	}
 
 	/** "Farming 2", "End 1", "Ice Demon" from a key like RAIDS_FARMING#2. */
 	static String chestName(String key)
@@ -644,10 +680,16 @@ public class CoxStoragePlannerPlugin extends Plugin implements CoxStoragePanel.A
 		configManager.setConfiguration(CoxStoragePlannerConfig.GROUP, CoxStoragePlannerConfig.KEY_CHESTS, chests.encode(gson));
 	}
 
+	/** The chest a storage in front of the player belongs to: the room's, or the sidebar's when the room isn't known. */
+	private String activeChest()
+	{
+		return currentChest != null ? currentChest : selectedChest;
+	}
+
 	/** Recomputes the progress the overlays show, on the client thread. */
 	private void updateOpenChest()
 	{
-		ChestPlan plan = openStorage == 0 ? null : chests.get(currentChest);
+		ChestPlan plan = openStorage == 0 ? null : chests.get(activeChest());
 		if (plan == null)
 		{
 			openChest = null;

@@ -28,6 +28,8 @@ import javax.swing.JTextArea;
 import javax.swing.JTextField;
 import javax.swing.SwingConstants;
 import javax.swing.border.EmptyBorder;
+import javax.swing.event.DocumentEvent;
+import javax.swing.event.DocumentListener;
 import net.runelite.client.ui.ColorScheme;
 import net.runelite.client.ui.FontManager;
 import net.runelite.client.ui.PluginPanel;
@@ -438,12 +440,30 @@ class CoxStoragePanel extends PluginPanel
 		area.setToolTipText("<html>One item per line, matched from the start of its name, so 'Xeric's aid' is any dose."
 			+ "<br>* and ? are wildcards: '*chinchompa', 'Dragon *'. 'Stinkhorn mushroom, 3' for a number"
 			+ (deposit ? ", 'everything' to empty the inventory" : "") + ".</html>");
-		area.addFocusListener(new FocusAdapter()
+		// saved as you type, so the lists count even if the game canvas never takes the focus back
+		area.getDocument().addDocumentListener(new DocumentListener()
 		{
 			@Override
-			public void focusLost(FocusEvent e)
+			public void insertUpdate(DocumentEvent e)
 			{
-				if (selectedChest != null)
+				commit();
+			}
+
+			@Override
+			public void removeUpdate(DocumentEvent e)
+			{
+				commit();
+			}
+
+			@Override
+			public void changedUpdate(DocumentEvent e)
+			{
+				commit();
+			}
+
+			private void commit()
+			{
+				if (!updating && selectedChest != null)
 				{
 					actions.setChestLines(selectedChest, deposit, area.getText());
 				}
