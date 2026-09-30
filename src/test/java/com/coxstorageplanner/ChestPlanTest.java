@@ -102,16 +102,18 @@ public class ChestPlanTest
 		assertEquals("Xeric's aid, 2", before.next().line.text);
 		assertTrue(before.highlightsDeposit("Elder maul"));
 		assertFalse(before.highlightsDeposit("Overload(4)"));
-		assertEquals(1, before.highlightsWithdraw("Xeric's aid(3)", true).order);
-		assertNull(before.highlightsWithdraw("Overload(4)", true));
-		assertEquals(3, before.highlightsWithdraw("Overload(4)", false).order);
+		assertEquals(1, before.highlightsWithdraw("Xeric's aid(3)", 1).order);
+		assertNull(before.highlightsWithdraw("Overload(4)", 1));
+		assertNull(before.highlightsWithdraw("Overload(4)", 2));
+		assertEquals(3, before.highlightsWithdraw("Overload(4)", 3).order);
+		assertEquals(2, before.rank(before.highlightsWithdraw("Overload(4)", 3)));
 		assertFalse(before.isDone());
 
 		ChestProgress after = new ChestProgress(plan,
 			ChestProgress.tally(Arrays.asList("Xeric's aid(4)", "Xeric's aid(4)", "Stinkhorn mushroom", "Overload(4)")));
 		assertTrue(after.isDone());
 		assertNull(after.next());
-		assertNull(after.highlightsWithdraw("Overload(4)", false));
+		assertNull(after.highlightsWithdraw("Overload(4)", Integer.MAX_VALUE));
 	}
 
 	@Test

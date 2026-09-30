@@ -1,8 +1,11 @@
 package com.coxstorageplanner;
 
 import java.awt.Color;
+import java.awt.Font;
+import java.awt.FontMetrics;
 import java.awt.Graphics2D;
 import java.awt.Rectangle;
+import java.awt.RenderingHints;
 import java.awt.image.BufferedImage;
 import javax.inject.Inject;
 import net.runelite.api.gameval.InterfaceID;
@@ -13,7 +16,8 @@ import net.runelite.client.ui.overlay.WidgetItemOverlay;
 
 /**
  * Outlines the items a chest plan still wants moved: in the side inventory what goes in,
- * in the storage what comes out. The next one of an ordered plan pulses.
+ * in the storage what comes out. The next one of an ordered plan pulses; with the next three
+ * lit, each carries a numbered orb that shrinks the further down the order it is.
  */
 class ChestItemOverlay extends WidgetItemOverlay
 {
@@ -30,6 +34,9 @@ class ChestItemOverlay extends WidgetItemOverlay
 		showOnInterfaces(InterfaceID.RAIDS_STORAGE_PRIVATE, InterfaceID.RAIDS_STORAGE_SHARED, InterfaceID.RAIDS_STORAGE_SIDE);
 	}
 
+	/** Orb diameters for the next withdrawal, the one after and the one after that. */
+	private static final int[] ORB_SIZES = {16, 12, 9};
+
 	@Override
 	public void renderItemOverlay(Graphics2D graphics, int itemId, WidgetItem widgetItem)
 	{
@@ -45,7 +52,8 @@ class ChestItemOverlay extends WidgetItemOverlay
 		String name = plugin.itemName(itemId);
 		int group = widgetItem.getWidget().getId() >>> 16;
 		Color color;
-		String number = null;
+		int order = 0;
+		int orb = 0;
 		boolean pulse;
 		if (group == InterfaceID.RAIDS_STORAGE_SIDE)
 		{
@@ -58,22 +66,35 @@ class ChestItemOverlay extends WidgetItemOverlay
 		}
 		else
 		{
-			boolean nextOnly = config.chestOrderedGlow() == ChestGlow.NEXT_ONLY;
-			ChestProgress.Step step = progress.highlightsWithdraw(name, nextOnly);
+			ChestGlow mode = config.chestOrderedGlow();
+			ChestProgress.Step step = progress.highlightsWithdraw(name, mode.getSteps());
 			if (step == null)
 			{
 				return;
 			}
-			ChestProgress.Step next = progress.next();
-			pulse = !progress.plan.isOrdered() || step == next;
+			int rank = progress.rank(step);
+			pulse = !progress.plan.isOrdered() || rank == 0;
 			color = config.chestGlowColor();
 			if (progress.plan.isOrdered())
 			{
-				number = String.valueOf(step.order);
-				if (!nextOnly && progress.withdrawals.size() > 1)
+				order = step.order;
+				switch (mode)
 				{
-					color = blend(config.chestGlowColor(), config.chestGlowLastColor(),
-						(step.order - 1) / (float) (progress.withdrawals.size() - 1));
+					case NEXT_THREE:
+						// the next one is big and bright, the ones behind it smaller and fainter
+						orb = ORB_SIZES[Math.min(rank, ORB_SIZES.length - 1)];
+						color = fade(color, rank == 0 ? 1f : rank == 1 ? 0.6f : 0.4f);
+						break;
+					case GRADIENT:
+						orb = ORB_SIZES[1];
+						if (progress.withdrawals.size() > 1)
+						{
+							color = blend(config.chestGlowColor(), config.chestGlowLastColor(),
+								(step.order - 1) / (float) (progress.withdrawals.size() - 1));
+						}
+						break;
+					default:
+						orb = ORB_SIZES[1];
 				}
 			}
 		}
@@ -81,20 +102,45 @@ class ChestItemOverlay extends WidgetItemOverlay
 		{
 			// a slow breathe between half and full strength
 			double phase = (System.currentTimeMillis() % 1200) / 1200.0 * 2 * Math.PI;
-			int alpha = (int) (color.getAlpha() * (0.75 + 0.25 * Math.sin(phase)));
-			color = new Color(color.getRed(), color.getGreen(), color.getBlue(), alpha);
+			color = fade(color, (float) (0.75 + 0.25 * Math.sin(phase)));
 		}
 		Rectangle bounds = widgetItem.getCanvasBounds();
 		BufferedImage outline = itemManager.getItemOutline(itemId, widgetItem.getQuantity(), color);
 		graphics.drawImage(outline, bounds.x, bounds.y, null);
-		if (number != null)
+		if (order > 0)
 		{
-			graphics.setFont(FontManager.getRunescapeSmallFont());
-			graphics.setColor(Color.BLACK);
-			graphics.drawString(number, bounds.x + 2, bounds.y + 11);
-			graphics.setColor(new Color(color.getRed(), color.getGreen(), color.getBlue()));
-			graphics.drawString(number, bounds.x + 1, bounds.y + 10);
+			drawOrb(graphics, bounds, orb, color, order);
 		}
+	}
+
+	/** A filled circle in the top left corner of the item with the step number in it. */
+	private static void drawOrb(Graphics2D graphics, Rectangle bounds, int size, Color color, int order)
+	{
+		Object aa = graphics.getRenderingHint(RenderingHints.KEY_ANTIALIASING);
+		graphics.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
+		int x = bounds.x - 1;
+		int y = bounds.y - 1;
+		graphics.setColor(new Color(0, 0, 0, Math.min(255, color.getAlpha())));
+		graphics.fillOval(x - 1, y - 1, size + 2, size + 2);
+		graphics.setColor(color);
+		graphics.fillOval(x, y, size, size);
+		graphics.setRenderingHint(RenderingHints.KEY_ANTIALIASING, aa);
+
+		Font font = size >= ORB_SIZES[0] ? FontManager.getRunescapeBoldFont() : FontManager.getRunescapeSmallFont();
+		graphics.setFont(font);
+		String text = String.valueOf(order);
+		FontMetrics metrics = graphics.getFontMetrics();
+		int tx = x + (size - metrics.stringWidth(text)) / 2;
+		int ty = y + (size + metrics.getAscent() - metrics.getDescent()) / 2;
+		graphics.setColor(Color.BLACK);
+		graphics.drawString(text, tx + 1, ty + 1);
+		graphics.setColor(Color.WHITE);
+		graphics.drawString(text, tx, ty);
+	}
+
+	private static Color fade(Color color, float strength)
+	{
+		return new Color(color.getRed(), color.getGreen(), color.getBlue(), Math.round(color.getAlpha() * strength));
 	}
 
 	private static Color blend(Color a, Color b, float t)

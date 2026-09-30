@@ -6,6 +6,7 @@ import java.awt.Color;
 import java.awt.Graphics2D;
 import java.awt.RenderingHints;
 import java.awt.image.BufferedImage;
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -13,6 +14,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Set;
 import javax.inject.Inject;
 import javax.swing.SwingUtilities;
 import net.runelite.api.ChatMessageType;
@@ -537,8 +539,9 @@ public class CoxStoragePlannerPlugin extends Plugin implements CoxStoragePanel.A
 	/**
 	 * Works out which chest the player is at. A room is its template (RAIDS_FARMING, RAIDS_ICE_DEMON...)
 	 * and the two rooms of the same template are told apart by which came first this raid, which
-	 * is fixed in Challenge Mode. Room slots are 32x32 tile squares of the instance; walking within
-	 * a room that straddles two squares keeps the same key.
+	 * is fixed in Challenge Mode. The floors are on different planes (upper floor 3, lower floor 2),
+	 * so the End room of each floor is its own chest. Room slots are 32x32 tile squares of the
+	 * instance; walking within a room that straddles two squares keeps the same key.
 	 */
 	private void trackRoom()
 	{
@@ -577,7 +580,8 @@ public class CoxStoragePlannerPlugin extends Plugin implements CoxStoragePanel.A
 			if (lastRoomSlot != null && lastRoomSlot.startsWith(template.name() + ":"))
 			{
 				String[] parts = lastRoomSlot.split(":");
-				if (Math.abs(Integer.parseInt(parts[1]) - slotX) <= 1 && Math.abs(Integer.parseInt(parts[2]) - slotY) <= 1)
+				if (Math.abs(Integer.parseInt(parts[1]) - slotX) <= 1 && Math.abs(Integer.parseInt(parts[2]) - slotY) <= 1
+					&& Integer.parseInt(parts[3]) == world.getPlane())
 				{
 					key = roomKeys.get(lastRoomSlot);
 				}
@@ -604,7 +608,11 @@ public class CoxStoragePlannerPlugin extends Plugin implements CoxStoragePanel.A
 		}
 	}
 
-	/** "Farming 2", "Ice Demon" from a key like RAIDS_FARMING#2. */
+	/** Room templates a Challenge Mode raid has more than one of, so the first is "End 1" not "End". */
+	private static final Set<String> REPEATED_ROOMS = new HashSet<>(Arrays.asList(
+		"RAIDS_END", "RAIDS_FARMING", "RAIDS_FARMING2", "RAIDS_SCAVENGERS", "RAIDS_SCAVENGERS2"));
+
+	/** "Farming 2", "End 1", "Ice Demon" from a key like RAIDS_FARMING#2. */
 	static String chestName(String key)
 	{
 		String[] parts = key.substring("RAIDS_".length()).split("#");
@@ -619,7 +627,7 @@ public class CoxStoragePlannerPlugin extends Plugin implements CoxStoragePanel.A
 			name.setLength(name.length() - 1);
 		}
 		String number = parts.length > 1 ? parts[1] : "1";
-		boolean several = key.startsWith("RAIDS_FARMING") || key.startsWith("RAIDS_SCAVENGERS") || !number.equals("1");
+		boolean several = REPEATED_ROOMS.contains("RAIDS_" + parts[0]) || !number.equals("1");
 		return several ? name + " " + number : name.toString();
 	}
 

@@ -143,22 +143,45 @@ public final class ChestProgress
 
 	/**
 	 * The withdrawal step an item in the storage belongs to and hasn't been done, or null.
-	 * With an ordered plan and nextOnly, only the next step counts.
+	 * With an ordered plan only the next {@code limit} steps still to do count.
 	 */
-	public Step highlightsWithdraw(String itemName, boolean nextOnly)
+	public Step highlightsWithdraw(String itemName, int limit)
 	{
-		if (plan.isOrdered() && nextOnly)
-		{
-			Step next = next();
-			return next != null && next.line.matches(itemName) ? next : null;
-		}
+		int rank = 0;
 		for (Step step : withdrawals)
 		{
-			if (!step.done && step.line.matches(itemName))
+			if (step.done)
+			{
+				continue;
+			}
+			if (plan.isOrdered() && rank >= limit)
+			{
+				return null;
+			}
+			if (step.line.matches(itemName))
 			{
 				return step;
 			}
+			rank++;
 		}
 		return null;
+	}
+
+	/** How many withdrawals still to do come before this one: 0 for the next one. */
+	public int rank(Step step)
+	{
+		int rank = 0;
+		for (Step other : withdrawals)
+		{
+			if (other == step)
+			{
+				return rank;
+			}
+			if (!other.done)
+			{
+				rank++;
+			}
+		}
+		return -1;
 	}
 }
