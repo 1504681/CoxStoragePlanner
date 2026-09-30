@@ -6,6 +6,7 @@ import java.awt.Color;
 import java.awt.Graphics2D;
 import java.awt.RenderingHints;
 import java.awt.image.BufferedImage;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
@@ -144,6 +145,7 @@ public class CoxStoragePlannerPlugin extends Plugin implements CoxStoragePanel.A
 	private Supplies sharedStorage;
 	/** Item name to quantity in the inventory. */
 	private Map<String, Integer> inventoryItems = Collections.emptyMap();
+	private Map<String, Integer> wornItems = Collections.emptyMap();
 	/** The inventory when the storage was opened, so a "put in, N" line knows how many went in. */
 	private Map<String, Integer> openedWith = Collections.emptyMap();
 
@@ -764,15 +766,17 @@ public class CoxStoragePlannerPlugin extends Plugin implements CoxStoragePanel.A
 			return;
 		}
 		Map<String, Integer> items;
+		Map<String, Integer> worn;
 		Map<String, Integer> before;
 		synchronized (lock)
 		{
 			items = inventoryItems;
+			worn = wornItems;
 			before = openedWith;
 		}
 		ItemContainer storage = client.getItemContainer(openStorage == InterfaceID.RAIDS_STORAGE_SHARED
 			? InventoryID.RAIDS_SHAREDSTORAGE : InventoryID.RAIDS_PRIVATESTORAGE);
-		openChest = new ChestProgress(plan, items, before, tally(storage));
+		openChest = new ChestProgress(plan, items, worn, before, tally(storage));
 	}
 
 	/** Item name to quantity for a container, empty for one the client hasn't seen. */
@@ -893,10 +897,12 @@ public class CoxStoragePlannerPlugin extends Plugin implements CoxStoragePanel.A
 		ItemContainer carried = client.getItemContainer(InventoryID.INV);
 		Supplies carriedSupplies = carried == null ? Supplies.EMPTY : count(carried.getItems());
 		Map<String, Integer> items = tally(carried);
+		Map<String, Integer> worn = tally(client.getItemContainer(InventoryID.WORN));
 		synchronized (lock)
 		{
 			inventory = carriedSupplies;
 			inventoryItems = items;
+			wornItems = worn;
 		}
 		updateOpenChest();
 	}
@@ -1044,6 +1050,45 @@ public class CoxStoragePlannerPlugin extends Plugin implements CoxStoragePanel.A
 	}
 
 	@Override
+	public void copyLoadout(String key)
+	{
+		clientThread.invokeLater(() ->
+		{
+			ChestPlan plan = chests.get(key);
+			if (plan == null)
+			{
+				return;
+			}
+			List<String> names = new ArrayList<>();
+			List<Integer> quantities = new ArrayList<>();
+			for (int containerId : new int[]{InventoryID.WORN, InventoryID.INV})
+			{
+				ItemContainer container = client.getItemContainer(containerId);
+				if (container == null)
+				{
+					continue;
+				}
+				for (Item item : container.getItems())
+				{
+					names.add(item.getId() > 0 ? itemName(item.getId()) : null);
+					quantities.add(item.getQuantity());
+				}
+			}
+			List<String> lines = ChestProgress.loadoutLines(names, quantities);
+			if (lines.isEmpty())
+			{
+				return;
+			}
+			plan.getWithdraw().clear();
+			plan.getWithdraw().addAll(lines);
+			plan.setOrdered(true);
+			saveChests();
+			updateOpenChest();
+			refresh();
+		});
+	}
+
+	@Override
 	public void setMarking(boolean on)
 	{
 		if (marking != on)
@@ -1133,6 +1178,7 @@ public class CoxStoragePlannerPlugin extends Plugin implements CoxStoragePanel.A
 		synchronized (lock)
 		{
 			state.carriedItems = inventoryItems;
+			state.wornItems = wornItems;
 			state.inventory = inventory;
 			state.privateStorage = privateStorage;
 			state.sharedStorage = sharedStorage;

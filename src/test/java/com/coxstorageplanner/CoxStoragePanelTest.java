@@ -60,6 +60,11 @@ public class CoxStoragePanelTest
 		public void deleteChest(String key)
 		{
 		}
+
+		@Override
+		public void copyLoadout(String key)
+		{
+		}
 	};
 
 	private static PanelState busyRaid()

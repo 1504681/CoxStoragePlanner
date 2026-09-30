@@ -36,6 +36,8 @@ final class PanelState
 	String currentChest;
 	/** Item name to quantity in the inventory, for the steps of a chest that isn't open. */
 	Map<String, Integer> carriedItems = new LinkedHashMap<>();
+	/** Item name to quantity worn, which counts as withdrawn. */
+	Map<String, Integer> wornItems = new LinkedHashMap<>();
 	/** Progress at the storage that's open right now, null when none is. */
 	ChestProgress openChest;
 	/** Whether clicking items in a storage or the inventory adds them to the chest's lists. */

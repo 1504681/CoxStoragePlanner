@@ -4,13 +4,16 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
+import java.util.regex.Pattern;
 
 /**
  * A chest's plan checked against the inventory right now. A deposit is done when none of the item is
  * left, or, for a line with a number, when that many went in since the storage was opened or are
- * already in it. A withdrawal is done when the inventory holds the number asked for. Numbers are
- * quantities, so a stack of 14 juice counts as 14. Containers are maps of item name to quantity.
+ * already in it. A withdrawal is done when the inventory and worn equipment together hold the number
+ * asked for; the same item on a later line asks for that many more. Numbers are quantities, so a stack
+ * of 14 juice counts as 14. Containers are maps of item name to quantity.
  */
 public final class ChestProgress
 {
@@ -37,14 +40,21 @@ public final class ChestProgress
 
 	public ChestProgress(ChestPlan plan, Map<String, Integer> inventory)
 	{
-		this(plan, inventory, inventory, Collections.emptyMap());
+		this(plan, inventory, Collections.emptyMap(), inventory, Collections.emptyMap());
+	}
+
+	public ChestProgress(ChestPlan plan, Map<String, Integer> inventory, Map<String, Integer> openedWith, Map<String, Integer> storage)
+	{
+		this(plan, inventory, Collections.emptyMap(), openedWith, storage);
 	}
 
 	/**
+	 * @param worn what's equipped, which counts as withdrawn too so gear you put on stays ticked off
 	 * @param openedWith the inventory when the storage was opened
 	 * @param storage what the storage holds now
 	 */
-	public ChestProgress(ChestPlan plan, Map<String, Integer> inventory, Map<String, Integer> openedWith, Map<String, Integer> storage)
+	public ChestProgress(ChestPlan plan, Map<String, Integer> inventory, Map<String, Integer> worn,
+		Map<String, Integer> openedWith, Map<String, Integer> storage)
 	{
 		this.plan = plan;
 		List<Step> deposits = new ArrayList<>();
@@ -56,10 +66,14 @@ public final class ChestProgress
 			deposits.add(new Step(line, true, done, 0));
 		}
 		List<Step> withdrawals = new ArrayList<>();
+		Map<String, Integer> asked = new LinkedHashMap<>();
 		int order = 0;
 		for (ChestPlan.Line line : ChestPlan.parse(plan.getWithdraw()))
 		{
-			withdrawals.add(new Step(line, false, count(line, inventory) >= line.count, ++order));
+			// "Xeric's aid" twice means two of them
+			int need = asked.merge(line.name.toLowerCase(Locale.ROOT), line.count, Integer::sum);
+			boolean done = count(line, inventory) + count(line, worn) >= need;
+			withdrawals.add(new Step(line, false, done, ++order));
 		}
 		this.deposits = Collections.unmodifiableList(deposits);
 		this.withdrawals = Collections.unmodifiableList(withdrawals);
@@ -77,6 +91,42 @@ public final class ChestProgress
 		}
 		return count;
 	}
+
+	/**
+	 * Take-out lines that rebuild a loadout: the items in the order given (worn gear first, then the
+	 * inventory slot by slot), a run of the same item merged into one line with its number. Dose
+	 * suffixes go, so "Xeric's aid(4)" becomes "Xeric's aid". Nulls (empty slots) are skipped.
+	 *
+	 * @param quantities stack sizes, matching names
+	 */
+	public static List<String> loadoutLines(List<String> names, List<Integer> quantities)
+	{
+		List<String> lines = new ArrayList<>();
+		String last = null;
+		int count = 0;
+		for (int i = 0; i <= names.size(); i++)
+		{
+			String name = i < names.size() ? names.get(i) : null;
+			if (name != null)
+			{
+				name = DOSES.matcher(name).replaceFirst("");
+			}
+			if (name != null && name.equals(last))
+			{
+				count += quantities.get(i);
+				continue;
+			}
+			if (last != null)
+			{
+				lines.add(count > 1 ? last + ", " + count : last);
+			}
+			last = name;
+			count = name == null ? 0 : quantities.get(i);
+		}
+		return lines;
+	}
+
+	private static final Pattern DOSES = Pattern.compile("\\(\\d\\)$");
 
 	/** Item names, one per unit, to a container map; nulls (empty slots) are skipped. */
 	public static Map<String, Integer> tally(List<String> names)

@@ -57,6 +57,9 @@ class CoxStoragePanel extends PluginPanel
 		void selectChest(String key);
 
 		void deleteChest(String key);
+
+		/** Replaces a chest's Take out with what's worn and carried right now, in order, and orders it. */
+		void copyLoadout(String key);
 	}
 
 	interface Icons
@@ -422,7 +425,19 @@ class CoxStoragePanel extends PluginPanel
 		editor.addRow(chestOrdered, 4);
 		editor.addRow(small("Put in", Color.WHITE), 6);
 		editor.addRow(listArea(chestDeposit, true), 2);
-		editor.addRow(small("Take out", Color.WHITE), 6);
+		JPanel takeOut = new JPanel(new BorderLayout());
+		takeOut.setOpaque(false);
+		takeOut.add(small("Take out", Color.WHITE), BorderLayout.WEST);
+		takeOut.add(chip("Copy my loadout", ColorScheme.DARKER_GRAY_COLOR,
+			"<html>Replace Take out with what you're wearing and carrying right now, in order,<br>"
+				+ "and tick Withdraw in this order. Withdrawing it that way rebuilds the same inventory.</html>", () ->
+			{
+				if (selectedChest != null)
+				{
+					actions.copyLoadout(selectedChest);
+				}
+			}), BorderLayout.EAST);
+		editor.addRow(takeOut, 6);
 		editor.addRow(listArea(chestWithdraw, false), 2);
 		editor.addRow(chestSteps, 6);
 		chestEditor.setOpaque(false);
@@ -552,7 +567,7 @@ class CoxStoragePanel extends PluginPanel
 		if (plan.getKey().equals(state.currentChest))
 		{
 			ChestProgress progress = state.openChest != null && state.openChest.plan.getKey().equals(plan.getKey())
-				? state.openChest : new ChestProgress(plan, state.carriedItems);
+				? state.openChest : new ChestProgress(plan, state.carriedItems, state.wornItems, state.carriedItems, Collections.emptyMap());
 			ChestProgress.Step next = progress.next();
 			for (ChestProgress.Step step : progress.deposits)
 			{

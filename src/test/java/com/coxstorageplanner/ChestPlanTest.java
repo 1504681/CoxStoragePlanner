@@ -176,4 +176,33 @@ public class ChestPlanTest
 		assertEquals(1, CoxStoragePlannerPlugin.floor(3));
 		assertEquals(2, CoxStoragePlannerPlugin.floor(2));
 	}
+
+	@Test
+	public void wornGearCountsAsWithdrawnAndRepeatsAddUp()
+	{
+		ChestPlan plan = new ChestPlan("RAIDS_END#2", "End 2");
+		plan.getWithdraw().addAll(Arrays.asList("Scythe of vitur", "Xeric's aid", "Overload", "Xeric's aid"));
+		plan.setOrdered(true);
+		Map<String, Integer> carried = ChestProgress.tally(Arrays.asList("Xeric's aid(4)", "Overload (+)(4)"));
+		Map<String, Integer> worn = ChestProgress.tally(Arrays.asList("Scythe of vitur"));
+		Map<String, Integer> none = Collections.emptyMap();
+		ChestProgress progress = new ChestProgress(plan, carried, worn, carried, none);
+		assertTrue(progress.withdrawals.get(0).done);
+		assertTrue(progress.withdrawals.get(1).done);
+		assertTrue(progress.withdrawals.get(2).done);
+		assertFalse(progress.withdrawals.get(3).done);
+		assertEquals(4, progress.next().order);
+		assertFalse(new ChestProgress(plan, carried, none, carried, none).withdrawals.get(0).done);
+	}
+
+	@Test
+	public void loadoutLinesFollowTheSlotsAndMergeRuns()
+	{
+		List<String> names = Arrays.asList("Infernal cape", null, "Xeric's aid(4)", "Xeric's aid(4)", "Xeric's aid(3)",
+			"Endarkened juice", null, "Overload (+)(4)", "Xeric's aid(4)");
+		List<Integer> quantities = Arrays.asList(1, 0, 1, 1, 1, 11, 0, 1, 1);
+		assertEquals(Arrays.asList("Infernal cape", "Xeric's aid, 3", "Endarkened juice, 11", "Overload (+)", "Xeric's aid"),
+			ChestProgress.loadoutLines(names, quantities));
+		assertTrue(ChestProgress.loadoutLines(Arrays.asList((String) null), Arrays.asList(0)).isEmpty());
+	}
 }
