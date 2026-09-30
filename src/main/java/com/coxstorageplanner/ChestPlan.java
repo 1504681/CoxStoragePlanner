@@ -1,0 +1,220 @@
+package com.coxstorageplanner;
+
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Locale;
+import java.util.regex.Pattern;
+
+/**
+ * What to do at one storage unit: things to put in and things to take out, in order.
+ * A line is an item name, matched from its start so "Xeric's aid" covers every dose, or a pattern
+ * with * and ? like "*chinchompa", with an optional count like "Stinkhorn mushroom x3".
+ * "everything" deposits it all.
+ */
+public final class ChestPlan
+{
+	public static final String EVERYTHING = "everything";
+	public static final int MAX_LINES = 40;
+	public static final int MAX_LINE = 60;
+
+	/** One line of a list, parsed. */
+	public static final class Line
+	{
+		public final String text;
+		public final String name;
+		public final int count;
+		/** Whether the line says how many with " xN"; a deposit without it means all of them. */
+		public final boolean counted;
+		public final boolean everything;
+		/** Compiled form of a name with wildcards, null for a plain name. */
+		private final Pattern pattern;
+
+		Line(String text)
+		{
+			this.text = text;
+			String lower = text.toLowerCase(Locale.ROOT);
+			everything = lower.equals(EVERYTHING) || lower.equals("*") || lower.equals("all");
+			int count = 1;
+			boolean counted = false;
+			String name = text;
+			// "Name, 3", or the older "Name x3"
+			int comma = lower.lastIndexOf(',');
+			int x = lower.lastIndexOf(" x");
+			int cut = comma > 0 ? comma : x;
+			int numberAt = comma > 0 ? comma + 1 : x + 2;
+			if (cut > 0)
+			{
+				try
+				{
+					count = Math.max(1, Integer.parseInt(lower.substring(numberAt).trim()));
+					name = text.substring(0, cut).trim();
+					counted = true;
+				}
+				catch (NumberFormatException e)
+				{
+					// the comma or "x" was part of the name
+				}
+			}
+			this.name = name;
+			this.count = count;
+			this.counted = counted;
+			this.pattern = name.contains("*") || name.contains("?") ? glob(name) : null;
+		}
+
+		private static Pattern glob(String name)
+		{
+			StringBuilder regex = new StringBuilder();
+			for (char c : name.toCharArray())
+			{
+				regex.append(c == '*' ? ".*" : c == '?' ? "." : Pattern.quote(String.valueOf(c)));
+			}
+			return Pattern.compile(regex.toString(), Pattern.CASE_INSENSITIVE);
+		}
+
+		/** Whether an item with this name is what the line asks for. */
+		public boolean matches(String itemName)
+		{
+			if (everything)
+			{
+				return true;
+			}
+			if (itemName == null)
+			{
+				return false;
+			}
+			if (pattern != null)
+			{
+				return pattern.matcher(itemName).matches();
+			}
+			return itemName.toLowerCase(Locale.ROOT).startsWith(name.toLowerCase(Locale.ROOT));
+		}
+
+		@Override
+		public String toString()
+		{
+			return text;
+		}
+	}
+
+	private String key;
+	private String name;
+	private List<String> deposit = new ArrayList<>();
+	private List<String> withdraw = new ArrayList<>();
+	private boolean ordered;
+
+	public ChestPlan()
+	{
+	}
+
+	public ChestPlan(String key, String name)
+	{
+		this.key = key;
+		this.name = name;
+	}
+
+	public String getKey()
+	{
+		return key;
+	}
+
+	public String getName()
+	{
+		return name == null ? "" : name;
+	}
+
+	public void setName(String name)
+	{
+		this.name = name == null ? "" : name.trim();
+	}
+
+	public boolean isOrdered()
+	{
+		return ordered;
+	}
+
+	public void setOrdered(boolean ordered)
+	{
+		this.ordered = ordered;
+	}
+
+	public List<String> getDeposit()
+	{
+		return deposit == null ? deposit = new ArrayList<>() : deposit;
+	}
+
+	public List<String> getWithdraw()
+	{
+		return withdraw == null ? withdraw = new ArrayList<>() : withdraw;
+	}
+
+	/** Replaces a list with the non-empty lines of some typed text. */
+	public static List<String> lines(String text)
+	{
+		List<String> lines = new ArrayList<>();
+		if (text == null)
+		{
+			return lines;
+		}
+		for (String line : text.split("\n"))
+		{
+			line = line.trim();
+			if (!line.isEmpty() && lines.size() < MAX_LINES)
+			{
+				lines.add(line.length() > MAX_LINE ? line.substring(0, MAX_LINE) : line);
+			}
+		}
+		return lines;
+	}
+
+	public static List<Line> parse(List<String> lines)
+	{
+		List<Line> parsed = new ArrayList<>();
+		for (String line : lines)
+		{
+			parsed.add(new Line(line));
+		}
+		return parsed;
+	}
+
+	/**
+	 * Adds to or takes from the line for an item, keeping the count in the "Name, N" suffix.
+	 * Only a plain line for the item's base name is touched, never a wildcard; the line is
+	 * added at the end when there is none and dropped when its count reaches zero.
+	 *
+	 * @return whether the lines changed
+	 */
+	public static boolean mark(List<String> lines, String itemName, int delta)
+	{
+		String name = baseName(itemName);
+		for (int i = 0; i < lines.size(); i++)
+		{
+			Line line = new Line(lines.get(i));
+			if (line.pattern == null && !line.everything && line.name.equalsIgnoreCase(name))
+			{
+				int count = line.count + delta;
+				if (count <= 0)
+				{
+					lines.remove(i);
+				}
+				else
+				{
+					lines.set(i, count > 1 ? name + ", " + count : name);
+				}
+				return true;
+			}
+		}
+		if (delta > 0 && lines.size() < MAX_LINES)
+		{
+			lines.add(delta > 1 ? name + ", " + delta : name);
+			return true;
+		}
+		return false;
+	}
+
+	/** "Xeric's aid(4)" and "Toxic blowpipe (charged)" become "Xeric's aid" and "Toxic blowpipe". */
+	static String baseName(String itemName)
+	{
+		int paren = itemName.indexOf('(');
+		return paren > 0 ? itemName.substring(0, paren).trim() : itemName.trim();
+	}
+}
