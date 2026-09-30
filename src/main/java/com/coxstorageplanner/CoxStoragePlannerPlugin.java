@@ -553,7 +553,8 @@ public class CoxStoragePlannerPlugin extends Plugin implements CoxStoragePanel.A
 	 * and the two rooms of the same template are told apart by which came first this raid, which
 	 * is fixed in Challenge Mode. The floors are on different planes (first floor 3, second floor 2),
 	 * so the End and Farming rooms are numbered by floor. Room slots are 32x32 tile squares of the
-	 * instance; walking within a room that straddles two squares keeps the same key.
+	 * instance; walking within a room that straddles two squares keeps the same key. Ground the table
+	 * doesn't know counts as the room before it.
 	 */
 	private void trackRoom()
 	{
@@ -585,7 +586,12 @@ public class CoxStoragePlannerPlugin extends Plugin implements CoxStoragePanel.A
 				log.info("unknown raid room: template x={} y={} plane={} at plane {}", (chunk >> 14 & 0x3FF) * 8,
 					(chunk >> 3 & 0x7FF) * 8, chunk >> 24 & 3, plane);
 			}
-			currentChest = null;
+			if (!inRaid)
+			{
+				currentChest = null;
+			}
+			// inside the raid a stretch the table doesn't know still belongs to the last room, so a
+			// storage there (the one after the tightrope) goes on that room's chest
 			return;
 		}
 		WorldPoint world = player.getWorldLocation();
