@@ -139,22 +139,6 @@ public class ChestPlanTest
 		assertNull(new ChestProgress(plan, Collections.emptyMap()).next());
 	}
 
-	@Test
-	public void defaultChestsParseAndRoundTrip()
-	{
-		ChestBook book = ChestBook.defaults();
-		assertEquals(3, book.all().size());
-		ChestPlan end = book.get("RAIDS_END#1");
-		assertTrue(end.isOrdered());
-		assertEquals(19, end.getWithdraw().size());
-		ChestProgress progress = new ChestProgress(end, ChestProgress.tally(Arrays.asList("Revitalisation(4)")));
-		assertEquals("Scythe of Vitur", progress.next().line.text);
-		Gson gson = new Gson();
-		assertEquals(book.encode(gson), ChestBook.parse(book.encode(gson), gson).encode(gson));
-		assertTrue(ChestBook.isUnset(""));
-		assertFalse(ChestBook.isUnset("[]"));
-	}
-
 	/** An instance template chunk the way the client packs it. */
 	private static int chunk(int templateX, int templateY, int plane)
 	{
@@ -314,5 +298,21 @@ public class ChestPlanTest
 		// the item of the next step, or of a done one, is never out of order
 		carried = ChestProgress.tally(Arrays.asList("Xeric's aid(4)", "Xeric's aid(4)", "Overload (+)(4)"));
 		assertTrue(new ChestProgress(plan, carried, none, carried, none, true).outOfOrder.isEmpty());
+	}
+
+	@Test
+	public void chestsRoundTripThroughJson()
+	{
+		ChestBook book = new ChestBook();
+		ChestPlan plan = book.getOrCreate("RAIDS_END#2", "Pre-Olm");
+		plan.getDeposit().add("everything else");
+		plan.getWithdraw().addAll(Arrays.asList("wear Scythe of vitur", "Xeric's aid, 2"));
+		plan.setOrdered(true);
+		Gson gson = new Gson();
+		ChestBook back = ChestBook.parse(book.encode(gson), gson);
+		assertEquals(book.encode(gson), back.encode(gson));
+		assertTrue(back.get("RAIDS_END#2").isOrdered());
+		assertTrue(ChestBook.parse("", gson).all().isEmpty());
+		assertTrue(ChestBook.parse("not json", gson).all().isEmpty());
 	}
 }
