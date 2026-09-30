@@ -40,7 +40,7 @@ public interface CoxStoragePlannerConfig extends Config
 	)
 	default NeedUnits needUnits()
 	{
-		return NeedUnits.DOSES;
+		return NeedUnits.POTIONS;
 	}
 
 	@ConfigItem(

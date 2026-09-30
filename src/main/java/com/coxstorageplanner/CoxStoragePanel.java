@@ -118,7 +118,7 @@ class CoxStoragePanel extends PluginPanel
 	private final Map<Potion, JComponent> supplyRows = new EnumMap<>(Potion.class);
 	private final JLabel teamTab = small("Team", Color.WHITE);
 	private final JLabel soloTab = small("Solo", MUTED);
-	private NeedUnits units = NeedUnits.DOSES;
+	private NeedUnits units = NeedUnits.POTIONS;
 	private final JPanel storageGrid = new JPanel(new GridBagLayout());
 	private final Stack chestsBody = new Stack(ColorScheme.DARKER_GRAY_COLOR);
 	private final JComboBox<String> chestChooser = new JComboBox<>();

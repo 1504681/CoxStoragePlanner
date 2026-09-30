@@ -14,7 +14,7 @@ Tick **Withdraw in this order** and the list becomes steps 1, 2, 3. While the st
 
 ## Supplies
 
-Overload, Xeric's aid, Revitalisation and Prayer enhance in your inventory and private storage (shared storage too if the setting is on), shown as doses or as potions (setting), against the `need` number you type next to each: what you want to have when you get to Olm. Short rows go red with how much more to pick up.
+Overload, Xeric's aid, Revitalisation and Prayer enhance in your inventory and private storage (shared storage too if the setting is on), shown as potions or as doses (setting), against the `need` number you type next to each: what you want to have when you get to Olm. Short rows go red with how much more to pick up.
 
 **Team** and **Solo** at the top switch between two sets of `need` numbers; with *Stamina in solo raids* on, Solo adds a Stamina row for the running at Olm. Both use the same numbers unless *Separate doses for solo raids* is on. Inside a raid the plugin picks team or solo from the raid's party size. Defaults: team 1 Overload, 6 Xeric's aid, 3 Revitalisation, 1 Prayer enhance; solo the same with 4 Revitalisation and 1 Stamina.
 
@@ -28,7 +28,7 @@ The game only sends a storage's contents while its interface is open, so both st
 
 | Setting | Default |
 |---|---|
-| Show supplies as | doses |
+| Show supplies as | potions |
 | Separate doses for solo raids | off |
 | Stamina in solo raids | off |
 | Count shared storage | off |

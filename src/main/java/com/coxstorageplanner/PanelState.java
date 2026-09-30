@@ -30,7 +30,7 @@ final class PanelState
 	boolean solo;
 	boolean separateSoloNeeds;
 	boolean trackStamina;
-	NeedUnits units = NeedUnits.DOSES;
+	NeedUnits units = NeedUnits.POTIONS;
 	ChestBook chests = new ChestBook();
 	/** Chest of the room the player is in, null outside one. */
 	String currentChest;
