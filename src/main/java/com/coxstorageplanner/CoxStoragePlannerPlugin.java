@@ -801,7 +801,7 @@ public class CoxStoragePlannerPlugin extends Plugin implements CoxStoragePanel.A
 		}
 		ItemContainer storage = client.getItemContainer(openStorage == InterfaceID.RAIDS_STORAGE_SHARED
 			? InventoryID.RAIDS_SHAREDSTORAGE : InventoryID.RAIDS_PRIVATESTORAGE);
-		openChest = new ChestProgress(plan, items, worn, before, tally(storage));
+		openChest = new ChestProgress(plan, items, worn, before, tally(storage), config.chestPutBack());
 	}
 
 	/** Item name to quantity for a container, empty for one the client hasn't seen. */
@@ -1169,6 +1169,7 @@ public class CoxStoragePlannerPlugin extends Plugin implements CoxStoragePanel.A
 		state.chests = chests.copy(gson);
 		state.currentChest = currentChest;
 		state.marking = marking;
+		state.putBack = config.chestPutBack();
 		state.openChest = openChest;
 		state.separateSoloNeeds = config.separateSoloNeeds();
 		state.trackStamina = config.trackStamina();

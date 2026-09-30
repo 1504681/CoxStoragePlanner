@@ -282,4 +282,37 @@ public class ChestPlanTest
 		assertTrue(ChestPlan.parse(Arrays.asList("everything else")).get(0).everythingElse);
 		assertFalse(ChestPlan.parse(Arrays.asList("everything")).get(0).everythingElse);
 	}
+
+	@Test
+	public void carriedItemsOfLaterStepsGoBackFirst()
+	{
+		ChestPlan plan = new ChestPlan("RAIDS_END#2", "Pre-Olm");
+		plan.getWithdraw().addAll(Arrays.asList("Xeric's aid, 2", "Overload", "Prayer enhance"));
+		plan.setOrdered(true);
+		Map<String, Integer> none = Collections.emptyMap();
+
+		// the enhance is carried before the aid and the overload: back in it goes
+		Map<String, Integer> carried = ChestProgress.tally(Arrays.asList("Xeric's aid(4)", "Prayer enhance(4)"));
+		ChestProgress progress = new ChestProgress(plan, carried, none, carried, none, true);
+		assertEquals(Arrays.asList("Prayer enhance(4)"), progress.outOfOrder);
+		assertEquals(ChestProgress.Phase.DEPOSIT, progress.phase());
+		assertTrue(progress.highlightsDeposit("Prayer enhance(4)"));
+		assertFalse(progress.highlightsDeposit("Xeric's aid(4)"));
+		assertNull(progress.highlightsWithdraw("Xeric's aid(4)", 3));
+
+		// with the setting off it's just the plan as written
+		ChestProgress loose = new ChestProgress(plan, carried, none, carried, none, false);
+		assertTrue(loose.outOfOrder.isEmpty());
+		assertEquals(1, loose.highlightsWithdraw("Xeric's aid(4)", 3).order);
+
+		// put back: the next step lights again
+		carried = ChestProgress.tally(Arrays.asList("Xeric's aid(4)"));
+		progress = new ChestProgress(plan, carried, none, carried, none, true);
+		assertTrue(progress.outOfOrder.isEmpty());
+		assertEquals(1, progress.highlightsWithdraw("Xeric's aid(4)", 3).order);
+
+		// the item of the next step, or of a done one, is never out of order
+		carried = ChestProgress.tally(Arrays.asList("Xeric's aid(4)", "Xeric's aid(4)", "Overload (+)(4)"));
+		assertTrue(new ChestProgress(plan, carried, none, carried, none, true).outOfOrder.isEmpty());
+	}
 }

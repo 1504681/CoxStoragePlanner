@@ -48,6 +48,12 @@ class ChestOverlay extends OverlayPanel
 		{
 			width = Math.max(width, line(graphics, "Put in", step, false));
 		}
+		for (String name : progress.outOfOrder)
+		{
+			panelComponent.getChildren().add(LineComponent.builder()
+				.left("Put back").leftColor(TODO).right(name).rightColor(TODO).build());
+			width = Math.max(width, graphics.getFontMetrics().stringWidth("Put back  " + name));
+		}
 		for (ChestProgress.Step step : progress.withdrawals)
 		{
 			width = Math.max(width, line(graphics, progress.plan.isOrdered() ? step.order + "." : "Take", step, step == next));

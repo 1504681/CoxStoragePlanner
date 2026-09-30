@@ -127,13 +127,25 @@ public interface CoxStoragePlannerConfig extends Config
 		return ChestGlow.NEXT_THREE;
 	}
 
+	@ConfigItem(
+		keyName = "chestPutBack",
+		name = "Put back what's out of order",
+		description = "With an ordered withdraw list, ask to put back anything you carry that belongs to a later step, so it can come out in its place",
+		section = chestSection,
+		position = 3
+	)
+	default boolean chestPutBack()
+	{
+		return true;
+	}
+
 	@Alpha
 	@ConfigItem(
 		keyName = "chestGlowColor",
 		name = "Glow colour",
 		description = "Outline colour, and the first colour of the gradient",
 		section = chestSection,
-		position = 3
+		position = 4
 	)
 	default Color chestGlowColor()
 	{
@@ -146,7 +158,7 @@ public interface CoxStoragePlannerConfig extends Config
 		name = "Gradient end colour",
 		description = "Colour of the last item in an ordered list when all of them glow",
 		section = chestSection,
-		position = 4
+		position = 5
 	)
 	default Color chestGlowLastColor()
 	{
@@ -159,7 +171,7 @@ public interface CoxStoragePlannerConfig extends Config
 		name = "Wear colour",
 		description = "Outline of gear still to put on, in the storage and the inventory",
 		section = chestSection,
-		position = 5
+		position = 6
 	)
 	default Color chestWearColor()
 	{
@@ -171,7 +183,7 @@ public interface CoxStoragePlannerConfig extends Config
 		name = "Pulse",
 		description = "Make the outline breathe",
 		section = chestSection,
-		position = 6
+		position = 7
 	)
 	default boolean chestGlowPulse()
 	{

@@ -14,8 +14,9 @@ import java.util.regex.Pattern;
  * number, when that many went in since the storage was opened or are already in it; "everything else"
  * is done when nothing is carried that the take-out list doesn't keep. A withdrawal is done when the
  * inventory and worn equipment together hold the number asked for; the same item on a later line asks
- * for that many more. A "wear" line is done once it's worn. Numbers are quantities, so a stack of 14
- * juice counts as 14. Containers are maps of item name to quantity.
+ * for that many more. A "wear" line is done once it's worn. With putBack, an ordered plan also wants
+ * anything carried that belongs to a later step put back first, so it can come out in its place.
+ * Numbers are quantities, so a stack of 14 juice counts as 14. Containers are maps of item name to quantity.
  */
 public final class ChestProgress
 {
@@ -46,6 +47,8 @@ public final class ChestProgress
 	public final List<Step> wears;
 	public final List<Step> deposits;
 	public final List<Step> withdrawals;
+	/** Carried items that belong to a later step of an ordered plan, to put back before taking out. */
+	public final List<String> outOfOrder;
 
 	public ChestProgress(ChestPlan plan, Map<String, Integer> inventory)
 	{
@@ -64,6 +67,13 @@ public final class ChestProgress
 	 */
 	public ChestProgress(ChestPlan plan, Map<String, Integer> inventory, Map<String, Integer> worn,
 		Map<String, Integer> openedWith, Map<String, Integer> storage)
+	{
+		this(plan, inventory, worn, openedWith, storage, false);
+	}
+
+	/** @param putBack whether an ordered plan wants carried items of later steps put back first */
+	public ChestProgress(ChestPlan plan, Map<String, Integer> inventory, Map<String, Integer> worn,
+		Map<String, Integer> openedWith, Map<String, Integer> storage, boolean putBack)
 	{
 		this.plan = plan;
 		List<ChestPlan.Line> takeOut = ChestPlan.parse(plan.getWithdraw());
@@ -109,9 +119,37 @@ public final class ChestProgress
 			boolean done = count(line, inventory) + count(line, worn) >= need;
 			withdrawals.add(new Step(line, false, done, ++order));
 		}
+		List<String> outOfOrder = new ArrayList<>();
+		if (putBack && plan.isOrdered())
+		{
+			int next = 0;
+			while (next < withdrawals.size() && withdrawals.get(next).done)
+			{
+				next++;
+			}
+			for (String name : inventory.keySet())
+			{
+				// carried, not wanted by the next step or one already done, but by one further on
+				boolean early = false;
+				boolean later = false;
+				for (int i = 0; i < withdrawals.size(); i++)
+				{
+					if (withdrawals.get(i).line.matches(name))
+					{
+						early |= i <= next;
+						later |= i > next;
+					}
+				}
+				if (later && !early)
+				{
+					outOfOrder.add(name);
+				}
+			}
+		}
 		this.wears = Collections.unmodifiableList(wears);
 		this.deposits = Collections.unmodifiableList(deposits);
 		this.withdrawals = Collections.unmodifiableList(withdrawals);
+		this.outOfOrder = Collections.unmodifiableList(outOfOrder);
 	}
 
 	/** Whether the take-out list keeps an item, so "everything else" leaves it alone. */
@@ -134,7 +172,7 @@ public final class ChestProgress
 		{
 			return Phase.WEAR;
 		}
-		return allDone(deposits) ? Phase.WITHDRAW : Phase.DEPOSIT;
+		return allDone(deposits) && outOfOrder.isEmpty() ? Phase.WITHDRAW : Phase.DEPOSIT;
 	}
 
 	private static boolean allDone(List<Step> steps)
@@ -232,7 +270,7 @@ public final class ChestProgress
 
 	public boolean isDone()
 	{
-		return allDone(wears) && allDone(deposits) && allDone(withdrawals);
+		return allDone(wears) && allDone(deposits) && outOfOrder.isEmpty() && allDone(withdrawals);
 	}
 
 	/** Whether an item, in the storage or the inventory, is gear still to put on. */
@@ -258,6 +296,10 @@ public final class ChestProgress
 		if (phase() != Phase.DEPOSIT)
 		{
 			return false;
+		}
+		if (outOfOrder.contains(itemName))
+		{
+			return true;
 		}
 		List<ChestPlan.Line> takeOut = null;
 		for (Step step : deposits)

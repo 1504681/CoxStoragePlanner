@@ -569,7 +569,8 @@ class CoxStoragePanel extends PluginPanel
 		if (plan.getKey().equals(state.currentChest))
 		{
 			ChestProgress progress = state.openChest != null && state.openChest.plan.getKey().equals(plan.getKey())
-				? state.openChest : new ChestProgress(plan, state.carriedItems, state.wornItems, state.carriedItems, Collections.emptyMap());
+				? state.openChest
+				: new ChestProgress(plan, state.carriedItems, state.wornItems, state.carriedItems, Collections.emptyMap(), state.putBack);
 			ChestProgress.Step next = progress.next();
 			for (ChestProgress.Step step : progress.wears)
 			{
@@ -578,6 +579,10 @@ class CoxStoragePanel extends PluginPanel
 			for (ChestProgress.Step step : progress.deposits)
 			{
 				chestSteps.addRow(small((step.done ? "✓ " : "• ") + "in: " + step.line.text, step.done ? GOOD : Color.WHITE), 0);
+			}
+			for (String name : progress.outOfOrder)
+			{
+				chestSteps.addRow(small("• back in: " + name + " (comes later)", WARN), 0);
 			}
 			for (ChestProgress.Step step : progress.withdrawals)
 			{

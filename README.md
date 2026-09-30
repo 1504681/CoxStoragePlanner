@@ -10,7 +10,7 @@ The easy way to fill the lists is to click: tick **Mark by clicking** and, with 
 
 The plugin starts with three chests filled in (the author's CM route: gear and Olm ingredients into Ice Demon, juice and stinkhorns out at Farming 1, gear and potions out in order at Pre-Vanguards). Edit or delete them as you like; they come back only if the plugin's chest setting is cleared.
 
-A chest works in three phases while its storage is open: gear to wear, then things to put in, then things to take out. A Take out line starting with `wear` (`wear Scythe of vitur`) is gear to put on; it glows purple wherever it is, storage or inventory, until it's worn, and nothing else lights up until all of it is. Then the Put in items glow; `everything else` in Put in means whatever the Take out list doesn't keep. Once the inventory is clear the Take out list lights, in order. Gear you put on stays ticked off, and the same item on a later line means one more of it.
+A chest works in three phases while its storage is open: gear to wear, then things to put in, then things to take out. A Take out line starting with `wear` (`wear Scythe of vitur`) is gear to put on; it glows purple wherever it is, storage or inventory, until it's worn, and nothing else lights up until all of it is. Then the Put in items glow; `everything else` in Put in means whatever the Take out list doesn't keep. Once the inventory is clear the Take out list lights, in order. With *Put back what's out of order* on (default), anything you carry that belongs to a later step of an ordered list is asked back into the storage first, so it can come out in its place and the layout ends up right. Gear you put on stays ticked off, and the same item on a later line means one more of it.
 
 **Copy my loadout** next to Take out sets all of that up from what you're wearing and carrying right now: worn gear as `wear` lines, then the inventory slot by slot (a run of the same item becomes one line with its number, `Xeric's aid, 3`), *Withdraw in this order* ticked, and `everything else` in Put in if it was empty. Set the chest before Olm up that way once, with the inventory laid out how you want it, and the plugin walks you through it every raid: put the gear on, dump what's left, pull the rest in order, same layout.
 
@@ -38,6 +38,7 @@ The game only sends a storage's contents while its interface is open, so both st
 | Steps overlay | off |
 | Glow items | on |
 | Ordered withdraw glow | next three, biggest first |
+| Put back what's out of order | on |
 | Glow colour / gradient end colour / wear colour | cyan / pink / purple |
 | Pulse | on |
 

@@ -42,6 +42,8 @@ final class PanelState
 	ChestProgress openChest;
 	/** Whether clicking items in a storage or the inventory adds them to the chest's lists. */
 	boolean marking;
+	/** Whether an ordered plan wants carried items of later steps put back first. */
+	boolean putBack;
 
 	final List<Member> team = new ArrayList<>();
 
