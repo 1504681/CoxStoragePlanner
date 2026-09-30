@@ -5,6 +5,7 @@ import com.google.gson.JsonSyntaxException;
 import com.google.gson.reflect.TypeToken;
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.Arrays;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -16,10 +17,37 @@ public final class ChestBook
 
 	private final Map<String, ChestPlan> chests = new LinkedHashMap<>();
 
+	/** Whether the plugin has never saved any chests, as opposed to all of them having been deleted. */
+	public static boolean isUnset(String json)
+	{
+		return json == null || json.isEmpty();
+	}
+
+	/** Chests to start with on the first run: the author's Challenge Mode route. */
+	public static ChestBook defaults()
+	{
+		ChestBook book = new ChestBook();
+		ChestPlan ice = book.getOrCreate("RAIDS_ICE_DEMON#1", "Ice Demon");
+		ice.getDeposit().addAll(Arrays.asList(
+			"extended stam*", "dragon hunter*", "twisted buck*", "salve*", "elder*", "zamorak*", "dragon pick*",
+			"twisted ancestral*", "ancestral*", "*ayak*", "occult*", "conflic*", "imbued sara*",
+			"endark*, 11", "stinkhorn*, 7", "cicely, 2", "Lockpick", "*Voidwaker*"));
+		ChestPlan farming = book.getOrCreate("RAIDS_FARMING#1", "Farming 1");
+		farming.getWithdraw().addAll(Arrays.asList("endark*, 11", "Spade", "Stinkhorn mushroom, 7"));
+		ChestPlan end = book.getOrCreate("RAIDS_END#1", "End 1");
+		end.getWithdraw().addAll(Arrays.asList(
+			"Scythe of Vitur", "Overload", "Eye of Ayak", "Book of the Dead", "Ferocious gloves", "Amulet of rancour",
+			"Twisted ancestral robe top", "Imbued sara*", "Infernal cape", "Oathplate chest", "Confliction gauntlets",
+			"Twisted ancestral robe bottom", "Oathplate legs", "Occult necklace", "divine rune*", "Lockpick",
+			"Xeric*, 2", "Revit*, 2", "Prayer enh*"));
+		end.setOrdered(true);
+		return book;
+	}
+
 	public static ChestBook parse(String json, Gson gson)
 	{
 		ChestBook book = new ChestBook();
-		if (json == null || json.isEmpty())
+		if (isUnset(json))
 		{
 			return book;
 		}

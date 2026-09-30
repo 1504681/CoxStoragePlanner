@@ -176,7 +176,15 @@ public class CoxStoragePlannerPlugin extends Plugin implements CoxStoragePanel.A
 		needs = Needs.parse(config.needs(), Needs.defaults());
 		needsSolo = Needs.parse(config.needsSolo(), Needs.soloDefaults());
 		needsTabSolo = config.needsTabSolo();
-		chests = ChestBook.parse(config.chests(), gson);
+		if (ChestBook.isUnset(config.chests()))
+		{
+			chests = ChestBook.defaults();
+			saveChests();
+		}
+		else
+		{
+			chests = ChestBook.parse(config.chests(), gson);
+		}
 
 		panel = new CoxStoragePanel(this, (label, itemId) -> itemManager.getImage(itemId).addTo(label));
 		navigationButton = NavigationButton.builder()

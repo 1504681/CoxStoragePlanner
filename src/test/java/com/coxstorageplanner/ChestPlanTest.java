@@ -1,5 +1,6 @@
 package com.coxstorageplanner;
 
+import com.google.gson.Gson;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNull;
@@ -132,5 +133,21 @@ public class ChestPlanTest
 		ChestPlan plan = new ChestPlan("k", "n");
 		plan.getWithdraw().add("Overload");
 		assertNull(new ChestProgress(plan, Collections.emptyMap()).next());
+	}
+
+	@Test
+	public void defaultChestsParseAndRoundTrip()
+	{
+		ChestBook book = ChestBook.defaults();
+		assertEquals(3, book.all().size());
+		ChestPlan end = book.get("RAIDS_END#1");
+		assertTrue(end.isOrdered());
+		assertEquals(19, end.getWithdraw().size());
+		ChestProgress progress = new ChestProgress(end, ChestProgress.tally(Arrays.asList("Revitalisation(4)")));
+		assertEquals("Scythe of Vitur", progress.next().line.text);
+		Gson gson = new Gson();
+		assertEquals(book.encode(gson), ChestBook.parse(book.encode(gson), gson).encode(gson));
+		assertTrue(ChestBook.isUnset(""));
+		assertFalse(ChestBook.isUnset("[]"));
 	}
 }
