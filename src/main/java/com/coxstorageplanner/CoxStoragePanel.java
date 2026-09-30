@@ -504,7 +504,7 @@ class CoxStoragePanel extends PluginPanel
 
 	private void updateChests(PanelState state)
 	{
-		List<ChestPlan> plans = state.chests.all();
+		List<ChestPlan> plans = CoxStoragePlannerPlugin.inRaidOrder(state.chests.all());
 		// jump to the room's chest once it exists (it's made when its storage is first opened), once per room
 		if (state.currentChest == null)
 		{

@@ -9,6 +9,7 @@ import java.awt.image.BufferedImage;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
+import java.util.Comparator;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
@@ -699,12 +700,21 @@ public class CoxStoragePlannerPlugin extends Plugin implements CoxStoragePanel.A
 		return ROOMS.get((templateY & ~31) + (templatePlane << 16));
 	}
 
-	/** Moves chests saved under the old per-layout keys (RAIDS_FARMING2#1) to the room's key, dropping them if it's taken. */
+	/**
+	 * Moves chests saved under the old per-layout keys (RAIDS_FARMING2#1) to the room's key, dropping
+	 * them if it's taken, and gives chests still carrying an old default name the current one.
+	 */
 	private void migrateChestKeys()
 	{
 		boolean changed = false;
 		for (ChestPlan plan : chests.all())
 		{
+			if ((plan.getName().equals("End 1") || plan.getName().equals("End 2") || plan.getName().equals("End"))
+				&& !plan.getName().equals(chestName(plan.getKey())))
+			{
+				plan.setName(chestName(plan.getKey()));
+				changed = true;
+			}
 			String[] parts = plan.getKey().split("#", 2);
 			if (parts.length == 2 && parts[0].endsWith("2"))
 			{
@@ -726,9 +736,39 @@ public class CoxStoragePlannerPlugin extends Plugin implements CoxStoragePanel.A
 		}
 	}
 
-	/** "Farming 2", "End 1", "Ice Demon" from a key like RAIDS_FARMING#2. */
+	/** The Challenge Mode layout, which is fixed, so the sidebar can list chests in the order you reach them. */
+	private static final List<String> RAID_ORDER = Arrays.asList(
+		"RAIDS_START#1", "RAIDS_TEKTON#1", "RAIDS_CRABS#1", "RAIDS_ICE_DEMON#1", "RAIDS_FARMING#1", "RAIDS_SHAMANS#1",
+		"RAIDS_END#1", "RAIDS_VANGUARDS#1", "RAIDS_THIEVING#1", "RAIDS_VESPULA#1", "RAIDS_FARMING#2",
+		"RAIDS_TIGHTROPE#1", "RAIDS_GUARDIANS#1", "RAIDS_VASA#1", "RAIDS_MYSTICS#1", "RAIDS_MUTTADILES#1", "RAIDS_END#2");
+
+	/** Where a chest comes in the raid, for sorting; rooms the layout doesn't place go after the rest, by key. */
+	static int raidOrder(String key)
+	{
+		int index = RAID_ORDER.indexOf(key);
+		return index < 0 ? RAID_ORDER.size() : index;
+	}
+
+	/** Chests in the order the raid reaches them. */
+	static List<ChestPlan> inRaidOrder(List<ChestPlan> plans)
+	{
+		List<ChestPlan> sorted = new ArrayList<>(plans);
+		sorted.sort(Comparator.comparingInt((ChestPlan plan) -> raidOrder(plan.getKey())).thenComparing(ChestPlan::getKey));
+		return sorted;
+	}
+
+	/** "Farming 2", "Pre-Vanguards", "Ice Demon" from a key like RAIDS_FARMING#2. */
 	static String chestName(String key)
 	{
+		if (key.equals("RAIDS_END#1"))
+		{
+			// the End rooms are named for what's next, since that's what you're packing for
+			return "Pre-Vanguards";
+		}
+		if (key.equals("RAIDS_END#2"))
+		{
+			return "Pre-Olm";
+		}
 		String[] parts = key.substring("RAIDS_".length()).split("#");
 		String[] words = parts[0].toLowerCase(Locale.ROOT).split("_");
 		StringBuilder name = new StringBuilder();

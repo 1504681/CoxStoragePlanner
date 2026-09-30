@@ -34,7 +34,7 @@ public final class ChestBook
 			"endark*, 11", "stinkhorn*, 7", "cicely, 2", "Lockpick", "*Voidwaker*"));
 		ChestPlan farming = book.getOrCreate("RAIDS_FARMING#1", "Farming 1");
 		farming.getWithdraw().addAll(Arrays.asList("endark*, 11", "Spade", "Stinkhorn mushroom, 7"));
-		ChestPlan end = book.getOrCreate("RAIDS_END#1", "End 1");
+		ChestPlan end = book.getOrCreate("RAIDS_END#1", "Pre-Vanguards");
 		end.getWithdraw().addAll(Arrays.asList(
 			"Scythe of Vitur", "Overload", "Eye of Ayak", "Book of the Dead", "Ferocious gloves", "Amulet of rancour",
 			"Twisted ancestral robe top", "Imbued sara*", "Infernal cape", "Oathplate chest", "Confliction gauntlets",

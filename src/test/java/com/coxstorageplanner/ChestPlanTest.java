@@ -174,7 +174,19 @@ public class ChestPlanTest
 		assertNull(CoxStoragePlannerPlugin.roomType(chunk(3264, 5184, 0)));
 		assertNull(CoxStoragePlannerPlugin.roomType(chunk(3264 + 96, 5152, 0)));
 		assertNull(CoxStoragePlannerPlugin.roomType(-1));
-		assertEquals("End 2", CoxStoragePlannerPlugin.chestName("RAIDS_END#2"));
+		assertEquals("Pre-Olm", CoxStoragePlannerPlugin.chestName("RAIDS_END#2"));
+		assertEquals("Pre-Vanguards", CoxStoragePlannerPlugin.chestName("RAIDS_END#1"));
+		ChestBook book = new ChestBook();
+		for (String key : new String[]{"RAIDS_END#2", "RAIDS_FARMING#2", "RAIDS_SCAVENGERS#1", "RAIDS_ICE_DEMON#1", "RAIDS_END#1"})
+		{
+			book.getOrCreate(key, CoxStoragePlannerPlugin.chestName(key));
+		}
+		List<String> ordered = new ArrayList<>();
+		for (ChestPlan plan : CoxStoragePlannerPlugin.inRaidOrder(book.all()))
+		{
+			ordered.add(plan.getName());
+		}
+		assertEquals(Arrays.asList("Ice Demon", "Pre-Vanguards", "Farming 2", "Pre-Olm", "Scavengers 1"), ordered);
 		assertEquals("Farming 1", CoxStoragePlannerPlugin.chestName("RAIDS_FARMING#1"));
 		assertEquals("Ice Demon", CoxStoragePlannerPlugin.chestName("RAIDS_ICE_DEMON#1"));
 		assertEquals(1, CoxStoragePlannerPlugin.floor(3));
