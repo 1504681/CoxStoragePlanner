@@ -20,7 +20,6 @@ import java.util.Set;
 import javax.inject.Inject;
 import lombok.extern.slf4j.Slf4j;
 import javax.swing.SwingUtilities;
-import net.runelite.api.ChatMessageType;
 import net.runelite.api.Client;
 import net.runelite.api.Item;
 import net.runelite.api.ItemContainer;
@@ -39,8 +38,6 @@ import net.runelite.api.gameval.InterfaceID;
 import net.runelite.api.gameval.InventoryID;
 import net.runelite.api.gameval.VarbitID;
 import net.runelite.client.callback.ClientThread;
-import net.runelite.client.chat.ChatMessageManager;
-import net.runelite.client.chat.QueuedMessage;
 import net.runelite.client.config.ConfigManager;
 import net.runelite.client.eventbus.Subscribe;
 import net.runelite.client.events.ConfigChanged;
@@ -69,8 +66,6 @@ public class CoxStoragePlannerPlugin extends Plugin implements CoxStoragePanel.A
 	// keep in sync with build.gradle
 	public static final String VERSION = "1.0.0";
 
-	/** The Great Olm's chamber. */
-	private static final int OLM_REGION = 12889;
 	/** Ticks outside before a raid counts as left, so a relog or a reload doesn't wipe the raid's state. */
 	private static final int LEAVE_TICKS = 5;
 	/** Least ticks between two messages to the party. */
@@ -111,9 +106,6 @@ public class CoxStoragePlannerPlugin extends Plugin implements CoxStoragePanel.A
 
 	@Inject
 	private WSClient wsClient;
-
-	@Inject
-	private ChatMessageManager chatMessageManager;
 
 	private CoxStoragePanel panel;
 	private NavigationButton navigationButton;
@@ -162,7 +154,6 @@ public class CoxStoragePlannerPlugin extends Plugin implements CoxStoragePanel.A
 	private int closedStorageUntil;
 	private boolean inRaid;
 	private boolean soloRaid;
-	private boolean atOlm;
 	private int ticksOutside;
 	private int ticksSinceSend = SEND_INTERVAL;
 	private CoxStorageMessage lastSent;
@@ -524,12 +515,6 @@ public class CoxStoragePlannerPlugin extends Plugin implements CoxStoragePanel.A
 				changed = true;
 			}
 			trackRoom();
-			boolean olmNow = region() == OLM_REGION;
-			if (olmNow && !atOlm && config.olmReminder())
-			{
-				remindAtOlm();
-			}
-			atOlm = olmNow;
 		}
 		else if (inRaid && ++ticksOutside >= LEAVE_TICKS)
 		{
@@ -854,14 +839,6 @@ public class CoxStoragePlannerPlugin extends Plugin implements CoxStoragePanel.A
 		return config.chestOverlay() || config.chestGlow() ? openChest : null;
 	}
 
-	/** Region of the local player, the template's region inside an instance, -1 when not logged in. */
-	private int region()
-	{
-		Player player = client.getLocalPlayer();
-		if (player == null)
-		{
-			return -1;
-		}
 		return WorldPoint.fromLocalInstance(client, player.getLocalLocation()).getRegionID();
 	}
 
@@ -877,22 +854,9 @@ public class CoxStoragePlannerPlugin extends Plugin implements CoxStoragePanel.A
 		return solo && config.separateSoloNeeds() ? needsSolo : needs;
 	}
 
-	private void remindAtOlm()
-	{
-		String shortfalls = snapshot().shortfalls();
-		if (!shortfalls.isEmpty())
-		{
-			chatMessageManager.queue(QueuedMessage.builder()
-				.type(ChatMessageType.CONSOLE)
-				.runeLiteFormattedMessage("Short for Olm: " + shortfalls)
-				.build());
-		}
-	}
-
 	private void leftRaid()
 	{
 		soloRaid = false;
-		atOlm = false;
 		marking = false;
 		privateItems.clear();
 		roomKeys.clear();

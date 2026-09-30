@@ -92,18 +92,6 @@ public interface CoxStoragePlannerConfig extends Config
 	}
 
 	@ConfigItem(
-		keyName = "olmReminder",
-		name = "Olm entry reminder",
-		description = "Chat message with what you're still short when you enter Olm",
-		section = needSection,
-		position = 5
-	)
-	default boolean olmReminder()
-	{
-		return true;
-	}
-
-	@ConfigItem(
 		keyName = "chestOverlay",
 		name = "Steps overlay",
 		description = "List the chest's steps on screen while its storage is open",
