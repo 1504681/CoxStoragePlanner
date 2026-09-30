@@ -103,12 +103,16 @@ public class ChestPlanTest
 		assertEquals("Xeric's aid, 2", before.next().line.text);
 		assertTrue(before.highlightsDeposit("Elder maul"));
 		assertFalse(before.highlightsDeposit("Overload(4)"));
-		assertEquals(1, before.highlightsWithdraw("Xeric's aid(3)", 1).order);
-		assertNull(before.highlightsWithdraw("Overload(4)", 1));
-		assertNull(before.highlightsWithdraw("Overload(4)", 2));
-		assertEquals(3, before.highlightsWithdraw("Overload(4)", 3).order);
-		assertEquals(2, before.rank(before.highlightsWithdraw("Overload(4)", 3)));
+		// the maul has to go in before the take-outs light
+		assertNull(before.highlightsWithdraw("Xeric's aid(3)", 1));
 		assertFalse(before.isDone());
+
+		ChestProgress maulIn = new ChestProgress(plan, ChestProgress.tally(Arrays.asList("Xeric's aid(4)")));
+		assertEquals(1, maulIn.highlightsWithdraw("Xeric's aid(3)", 1).order);
+		assertNull(maulIn.highlightsWithdraw("Overload(4)", 1));
+		assertNull(maulIn.highlightsWithdraw("Overload(4)", 2));
+		assertEquals(3, maulIn.highlightsWithdraw("Overload(4)", 3).order);
+		assertEquals(2, maulIn.rank(maulIn.highlightsWithdraw("Overload(4)", 3)));
 
 		ChestProgress after = new ChestProgress(plan,
 			ChestProgress.tally(Arrays.asList("Xeric's aid(4)", "Xeric's aid(4)", "Stinkhorn mushroom", "Overload(4)")));
@@ -202,7 +206,68 @@ public class ChestPlanTest
 			"Endarkened juice", null, "Overload (+)(4)", "Xeric's aid(4)");
 		List<Integer> quantities = Arrays.asList(1, 0, 1, 1, 1, 11, 0, 1, 1);
 		assertEquals(Arrays.asList("Infernal cape", "Xeric's aid, 3", "Endarkened juice, 11", "Overload (+)", "Xeric's aid"),
-			ChestProgress.loadoutLines(names, quantities));
-		assertTrue(ChestProgress.loadoutLines(Arrays.asList((String) null), Arrays.asList(0)).isEmpty());
+			ChestProgress.loadoutLines(names, quantities, ""));
+		assertEquals(Arrays.asList("wear Infernal cape"),
+			ChestProgress.loadoutLines(Arrays.asList("Infernal cape"), Arrays.asList(1), "wear "));
+		assertTrue(ChestProgress.loadoutLines(Arrays.asList((String) null), Arrays.asList(0), "").isEmpty());
+	}
+
+	@Test
+	public void wearThenPutInThenTakeOut()
+	{
+		ChestPlan plan = new ChestPlan("RAIDS_END#2", "End 2");
+		plan.getDeposit().add("everything else");
+		plan.getWithdraw().addAll(Arrays.asList("wear Scythe of vitur", "wear Infernal cape", "Xeric's aid, 2", "Overload"));
+		plan.setOrdered(true);
+		Map<String, Integer> none = Collections.emptyMap();
+
+		// nothing worn yet: only the gear lights, wherever it is
+		Map<String, Integer> carried = ChestProgress.tally(Arrays.asList("Infernal cape", "Bronze dagger", "Xeric's aid(4)"));
+		ChestProgress progress = new ChestProgress(plan, carried, none, carried, none);
+		assertEquals(ChestProgress.Phase.WEAR, progress.phase());
+		assertTrue(progress.highlightsWear("Scythe of vitur"));
+		assertTrue(progress.highlightsWear("Infernal cape"));
+		assertFalse(progress.highlightsDeposit("Bronze dagger"));
+		assertNull(progress.highlightsWithdraw("Overload (+)(4)", 3));
+		assertEquals(2, progress.wears.size());
+		assertEquals(2, progress.withdrawals.size());
+		assertEquals("Xeric's aid, 2", progress.withdrawals.get(0).line.text);
+
+		// worn: the dagger has to go, the aid stays
+		Map<String, Integer> worn = ChestProgress.tally(Arrays.asList("Scythe of vitur", "Infernal cape"));
+		carried = ChestProgress.tally(Arrays.asList("Bronze dagger", "Xeric's aid(4)"));
+		progress = new ChestProgress(plan, carried, worn, carried, none);
+		assertEquals(ChestProgress.Phase.DEPOSIT, progress.phase());
+		assertFalse(progress.highlightsWear("Scythe of vitur"));
+		assertTrue(progress.highlightsDeposit("Bronze dagger"));
+		assertFalse(progress.highlightsDeposit("Xeric's aid(4)"));
+		assertNull(progress.highlightsWithdraw("Overload (+)(4)", 3));
+
+		// dagger gone: now the ordered take-out, and the aid already counts once
+		carried = ChestProgress.tally(Arrays.asList("Xeric's aid(4)"));
+		progress = new ChestProgress(plan, carried, worn, carried, none);
+		assertEquals(ChestProgress.Phase.WITHDRAW, progress.phase());
+		assertTrue(progress.deposits.get(0).done);
+		assertEquals(1, progress.highlightsWithdraw("Xeric's aid(4)", 3).order);
+		assertEquals(2, progress.highlightsWithdraw("Overload (+)(4)", 3).order);
+		assertFalse(progress.isDone());
+
+		carried = ChestProgress.tally(Arrays.asList("Xeric's aid(4)", "Xeric's aid(4)", "Overload (+)(4)"));
+		assertTrue(new ChestProgress(plan, carried, worn, carried, none).isDone());
+	}
+
+	@Test
+	public void wearLinesParse()
+	{
+		ChestPlan.Line line = ChestPlan.parse(Arrays.asList("wear Scythe of vitur")).get(0);
+		assertTrue(line.wear);
+		assertEquals("Scythe of vitur", line.name);
+		assertTrue(line.matches("Scythe of vitur"));
+		ChestPlan.Line counted = ChestPlan.parse(Arrays.asList("Equip Rada's blessing, 2")).get(0);
+		assertTrue(counted.wear);
+		assertEquals(2, counted.count);
+		assertEquals("Rada's blessing", counted.name);
+		assertTrue(ChestPlan.parse(Arrays.asList("everything else")).get(0).everythingElse);
+		assertFalse(ChestPlan.parse(Arrays.asList("everything")).get(0).everythingElse);
 	}
 }

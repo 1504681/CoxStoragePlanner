@@ -30,7 +30,7 @@ class ChestOverlay extends OverlayPanel
 	public Dimension render(Graphics2D graphics)
 	{
 		ChestProgress progress = plugin.getOpenChest();
-		if (progress == null || (progress.deposits.isEmpty() && progress.withdrawals.isEmpty()))
+		if (progress == null || (progress.wears.isEmpty() && progress.deposits.isEmpty() && progress.withdrawals.isEmpty()))
 		{
 			return null;
 		}
@@ -40,6 +40,10 @@ class ChestOverlay extends OverlayPanel
 			.build());
 		ChestProgress.Step next = progress.next();
 		int width = 0;
+		for (ChestProgress.Step step : progress.wears)
+		{
+			width = Math.max(width, line(graphics, "Wear", step, false));
+		}
 		for (ChestProgress.Step step : progress.deposits)
 		{
 			width = Math.max(width, line(graphics, "Put in", step, false));

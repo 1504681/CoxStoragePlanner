@@ -71,6 +71,7 @@ class CoxStoragePanel extends PluginPanel
 	private static final Color BAD = new Color(255, 96, 96);
 	private static final Color WARN = new Color(255, 170, 60);
 	private static final Color MUTED = new Color(160, 160, 160);
+	private static final Color WEAR = new Color(200, 130, 255);
 
 	private static final int MAX_NAME = 12;
 
@@ -454,7 +455,8 @@ class CoxStoragePanel extends PluginPanel
 		area.setMargin(new Insets(3, 3, 3, 3));
 		area.setToolTipText("<html>One item per line, matched from the start of its name, so 'Xeric's aid' is any dose."
 			+ "<br>* and ? are wildcards: '*chinchompa', 'Dragon *'. 'Stinkhorn mushroom, 3' for a number"
-			+ (deposit ? ", 'everything' to empty the inventory" : "") + ".</html>");
+			+ (deposit ? ", 'everything' to empty the inventory, 'everything else' to put away what Take out doesn't keep"
+			: ", 'wear Scythe of vitur' for gear to put on first") + ".</html>");
 		// saved as you type, so the lists count even if the game canvas never takes the focus back
 		area.getDocument().addDocumentListener(new DocumentListener()
 		{
@@ -569,6 +571,10 @@ class CoxStoragePanel extends PluginPanel
 			ChestProgress progress = state.openChest != null && state.openChest.plan.getKey().equals(plan.getKey())
 				? state.openChest : new ChestProgress(plan, state.carriedItems, state.wornItems, state.carriedItems, Collections.emptyMap());
 			ChestProgress.Step next = progress.next();
+			for (ChestProgress.Step step : progress.wears)
+			{
+				chestSteps.addRow(small((step.done ? "✓ " : "• ") + "wear: " + step.line.name, step.done ? GOOD : WEAR), 0);
+			}
 			for (ChestProgress.Step step : progress.deposits)
 			{
 				chestSteps.addRow(small((step.done ? "✓ " : "• ") + "in: " + step.line.text, step.done ? GOOD : Color.WHITE), 0);

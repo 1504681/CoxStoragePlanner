@@ -16,8 +16,9 @@ import net.runelite.client.ui.overlay.WidgetItemOverlay;
 
 /**
  * Outlines the items a chest plan still wants moved: in the side inventory what goes in,
- * in the storage what comes out. The next one of an ordered plan pulses; with the next three
- * lit, each carries a numbered orb that shrinks the further down the order it is.
+ * in the storage what comes out, and gear to put on in its own colour before either. The next one
+ * of an ordered plan pulses; with the next three lit, each carries a numbered orb that shrinks the
+ * further down the order it is.
  */
 class ChestItemOverlay extends WidgetItemOverlay
 {
@@ -55,7 +56,13 @@ class ChestItemOverlay extends WidgetItemOverlay
 		int order = 0;
 		int orb = 0;
 		boolean pulse;
-		if (group == InterfaceID.RAIDS_STORAGE_SIDE)
+		if (progress.highlightsWear(name))
+		{
+			// gear to put on, wherever it is
+			color = config.chestWearColor();
+			pulse = true;
+		}
+		else if (group == InterfaceID.RAIDS_STORAGE_SIDE)
 		{
 			if (!progress.highlightsDeposit(name))
 			{

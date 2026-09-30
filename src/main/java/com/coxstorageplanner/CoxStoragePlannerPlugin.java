@@ -1059,8 +1059,7 @@ public class CoxStoragePlannerPlugin extends Plugin implements CoxStoragePanel.A
 			{
 				return;
 			}
-			List<String> names = new ArrayList<>();
-			List<Integer> quantities = new ArrayList<>();
+			List<String> lines = new ArrayList<>();
 			for (int containerId : new int[]{InventoryID.WORN, InventoryID.INV})
 			{
 				ItemContainer container = client.getItemContainer(containerId);
@@ -1068,13 +1067,15 @@ public class CoxStoragePlannerPlugin extends Plugin implements CoxStoragePanel.A
 				{
 					continue;
 				}
+				List<String> names = new ArrayList<>();
+				List<Integer> quantities = new ArrayList<>();
 				for (Item item : container.getItems())
 				{
 					names.add(item.getId() > 0 ? itemName(item.getId()) : null);
 					quantities.add(item.getQuantity());
 				}
+				lines.addAll(ChestProgress.loadoutLines(names, quantities, containerId == InventoryID.WORN ? "wear " : ""));
 			}
-			List<String> lines = ChestProgress.loadoutLines(names, quantities);
 			if (lines.isEmpty())
 			{
 				return;
@@ -1082,6 +1083,11 @@ public class CoxStoragePlannerPlugin extends Plugin implements CoxStoragePanel.A
 			plan.getWithdraw().clear();
 			plan.getWithdraw().addAll(lines);
 			plan.setOrdered(true);
+			if (plan.getDeposit().isEmpty())
+			{
+				// clear out whatever the loadout doesn't have before pulling it
+				plan.getDeposit().add(ChestPlan.EVERYTHING_ELSE);
+			}
 			saveChests();
 			updateOpenChest();
 			refresh();

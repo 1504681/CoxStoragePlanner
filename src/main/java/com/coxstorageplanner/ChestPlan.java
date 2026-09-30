@@ -8,12 +8,14 @@ import java.util.regex.Pattern;
 /**
  * What to do at one storage unit: things to put in and things to take out, in order.
  * A line is an item name, matched from its start so "Xeric's aid" covers every dose, or a pattern
- * with * and ? like "*chinchompa", with an optional count like "Stinkhorn mushroom x3".
- * "everything" deposits it all.
+ * with * and ? like "*chinchompa", with an optional count like "Stinkhorn mushroom, 3".
+ * "everything" deposits it all, "everything else" deposits whatever the take-out list doesn't keep.
+ * A take-out line starting with "wear" is gear to put on, done once it's worn.
  */
 public final class ChestPlan
 {
 	public static final String EVERYTHING = "everything";
+	public static final String EVERYTHING_ELSE = "everything else";
 	public static final int MAX_LINES = 40;
 	public static final int MAX_LINE = 60;
 
@@ -26,6 +28,10 @@ public final class ChestPlan
 		/** Whether the line says how many with " xN"; a deposit without it means all of them. */
 		public final boolean counted;
 		public final boolean everything;
+		/** A deposit of whatever the take-out list doesn't ask for. */
+		public final boolean everythingElse;
+		/** A take-out that's done when the item is worn, not carried. */
+		public final boolean wear;
 		/** Compiled form of a name with wildcards, null for a plain name. */
 		private final Pattern pattern;
 
@@ -34,9 +40,22 @@ public final class ChestPlan
 			this.text = text;
 			String lower = text.toLowerCase(Locale.ROOT);
 			everything = lower.equals(EVERYTHING) || lower.equals("*") || lower.equals("all");
+			everythingElse = lower.equals(EVERYTHING_ELSE) || lower.equals("the rest") || lower.equals("rest");
+			boolean wear = false;
+			String name = text;
+			for (String prefix : new String[]{"wear ", "equip ", "wield "})
+			{
+				if (lower.startsWith(prefix))
+				{
+					wear = true;
+					name = text.substring(prefix.length()).trim();
+					lower = lower.substring(prefix.length()).trim();
+					break;
+				}
+			}
+			this.wear = wear;
 			int count = 1;
 			boolean counted = false;
-			String name = text;
 			// "Name, 3", or the older "Name x3"
 			int comma = lower.lastIndexOf(',');
 			int x = lower.lastIndexOf(" x");
@@ -47,7 +66,7 @@ public final class ChestPlan
 				try
 				{
 					count = Math.max(1, Integer.parseInt(lower.substring(numberAt).trim()));
-					name = text.substring(0, cut).trim();
+					name = name.substring(0, cut).trim();
 					counted = true;
 				}
 				catch (NumberFormatException e)
@@ -74,7 +93,7 @@ public final class ChestPlan
 		/** Whether an item with this name is what the line asks for. */
 		public boolean matches(String itemName)
 		{
-			if (everything)
+			if (everything || everythingElse)
 			{
 				return true;
 			}

@@ -165,12 +165,25 @@ public interface CoxStoragePlannerConfig extends Config
 		return new Color(255, 80, 200, 220);
 	}
 
+	@Alpha
+	@ConfigItem(
+		keyName = "chestWearColor",
+		name = "Wear colour",
+		description = "Outline of gear still to put on, in the storage and the inventory",
+		section = chestSection,
+		position = 5
+	)
+	default Color chestWearColor()
+	{
+		return new Color(190, 90, 255, 230);
+	}
+
 	@ConfigItem(
 		keyName = "chestGlowPulse",
 		name = "Pulse",
 		description = "Make the outline breathe",
 		section = chestSection,
-		position = 5
+		position = 6
 	)
 	default boolean chestGlowPulse()
 	{
