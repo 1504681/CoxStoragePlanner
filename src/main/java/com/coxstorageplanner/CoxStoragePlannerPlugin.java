@@ -111,6 +111,8 @@ public class CoxStoragePlannerPlugin extends Plugin implements CoxStoragePanel.A
 	private NavigationButton navigationButton;
 
 	private volatile ChestBook chests = new ChestBook();
+	/** The chest plans for solo raids, used when the setting keeps them apart. */
+	private volatile ChestBook chestsSolo = new ChestBook();
 	/** Key of the chest for the room the player is in, null outside a room with one. */
 	private volatile String currentChest;
 	/** Progress at the chest whose storage is open, for the overlays. */
@@ -174,7 +176,9 @@ public class CoxStoragePlannerPlugin extends Plugin implements CoxStoragePanel.A
 		needsSolo = Needs.parse(config.needsSolo(), Needs.soloDefaults());
 		needsTabSolo = config.needsTabSolo();
 		chests = ChestBook.parse(config.chests(), gson);
-		migrateChestKeys();
+		chestsSolo = ChestBook.parse(config.chestsSolo(), gson);
+		migrateChestKeys(chests);
+		migrateChestKeys(chestsSolo);
 
 		panel = new CoxStoragePanel(this, (label, itemId) -> itemManager.getImage(itemId).addTo(label));
 		navigationButton = NavigationButton.builder()
@@ -295,7 +299,7 @@ public class CoxStoragePlannerPlugin extends Plugin implements CoxStoragePanel.A
 				openedWith = inventoryItems;
 			}
 			String key = currentChest;
-			if (key != null && chests.get(key) == null && chests.getOrCreate(key, chestName(key)) != null)
+			if (key != null && book().get(key) == null && book().getOrCreate(key, chestName(key)) != null)
 			{
 				saveChests();
 			}
@@ -377,7 +381,7 @@ public class CoxStoragePlannerPlugin extends Plugin implements CoxStoragePanel.A
 
 	private void markItem(String key, boolean deposit, int itemId, int delta)
 	{
-		ChestPlan plan = chests.getOrCreate(key, chestName(key));
+		ChestPlan plan = book().getOrCreate(key, chestName(key));
 		if (plan != null && ChestPlan.mark(deposit ? plan.getDeposit() : plan.getWithdraw(), itemName(itemId), delta))
 		{
 			saveChests();
@@ -681,7 +685,7 @@ public class CoxStoragePlannerPlugin extends Plugin implements CoxStoragePanel.A
 	 * Moves chests saved under the old per-layout keys (RAIDS_FARMING2#1) to the room's key, dropping
 	 * them if it's taken, and gives chests still carrying an old default name the current one.
 	 */
-	private void migrateChestKeys()
+	private void migrateChestKeys(ChestBook chests)
 	{
 		boolean changed = false;
 		for (ChestPlan plan : chests.all())
@@ -765,6 +769,18 @@ public class CoxStoragePlannerPlugin extends Plugin implements CoxStoragePanel.A
 	private void saveChests()
 	{
 		configManager.setConfiguration(CoxStoragePlannerConfig.GROUP, CoxStoragePlannerConfig.KEY_CHESTS, chests.encode(gson));
+		configManager.setConfiguration(CoxStoragePlannerConfig.GROUP, CoxStoragePlannerConfig.KEY_CHESTS_SOLO, chestsSolo.encode(gson));
+	}
+
+	/** The chest plans in use: the solo ones in a solo raid (or on the Solo switch) when kept apart, else the team ones. */
+	private ChestBook book()
+	{
+		return separateChests() && solo() ? chestsSolo : chests;
+	}
+
+	private boolean separateChests()
+	{
+		return config.separateSoloChests();
 	}
 
 	/** The chest a storage in front of the player belongs to: the room's, or the sidebar's when the room isn't known. */
@@ -776,7 +792,7 @@ public class CoxStoragePlannerPlugin extends Plugin implements CoxStoragePanel.A
 	/** Recomputes the progress the overlays show, on the client thread. */
 	private void updateOpenChest()
 	{
-		ChestPlan plan = openStorage == 0 ? null : chests.get(activeChest());
+		ChestPlan plan = openStorage == 0 ? null : book().get(activeChest());
 		if (plan == null)
 		{
 			openChest = null;
@@ -999,6 +1015,14 @@ public class CoxStoragePlannerPlugin extends Plugin implements CoxStoragePanel.A
 	{
 		if (CoxStoragePlannerConfig.GROUP.equals(event.getGroup()))
 		{
+			if (CoxStoragePlannerConfig.KEY_SEPARATE_SOLO_CHESTS.equals(event.getKey()) && separateChests()
+				&& chestsSolo.all().isEmpty() && !chests.all().isEmpty())
+			{
+				// start the solo set from the team plans rather than from nothing
+				chestsSolo = chests.copy(gson);
+				saveChests();
+			}
+			clientThread.invokeLater(this::updateOpenChest);
 			refresh();
 		}
 	}
@@ -1008,7 +1032,7 @@ public class CoxStoragePlannerPlugin extends Plugin implements CoxStoragePanel.A
 	@Override
 	public void renameChest(String key, String name)
 	{
-		ChestPlan plan = chests.get(key);
+		ChestPlan plan = book().get(key);
 		if (plan != null && !plan.getName().equals(name.trim()))
 		{
 			plan.setName(name);
@@ -1020,7 +1044,7 @@ public class CoxStoragePlannerPlugin extends Plugin implements CoxStoragePanel.A
 	@Override
 	public void setChestOrdered(String key, boolean ordered)
 	{
-		ChestPlan plan = chests.get(key);
+		ChestPlan plan = book().get(key);
 		if (plan != null && plan.isOrdered() != ordered)
 		{
 			plan.setOrdered(ordered);
@@ -1033,7 +1057,7 @@ public class CoxStoragePlannerPlugin extends Plugin implements CoxStoragePanel.A
 	@Override
 	public void setChestLines(String key, boolean deposit, String text)
 	{
-		ChestPlan plan = chests.get(key);
+		ChestPlan plan = book().get(key);
 		if (plan == null)
 		{
 			return;
@@ -1055,7 +1079,7 @@ public class CoxStoragePlannerPlugin extends Plugin implements CoxStoragePanel.A
 	{
 		clientThread.invokeLater(() ->
 		{
-			ChestPlan plan = chests.get(key);
+			ChestPlan plan = book().get(key);
 			if (plan == null)
 			{
 				return;
@@ -1112,9 +1136,30 @@ public class CoxStoragePlannerPlugin extends Plugin implements CoxStoragePanel.A
 	}
 
 	@Override
+	public void copyChestFromOther(String key)
+	{
+		ChestBook from = book() == chests ? chestsSolo : chests;
+		ChestPlan source = from.get(key);
+		ChestPlan plan = book().getOrCreate(key, chestName(key));
+		if (source == null || plan == null)
+		{
+			return;
+		}
+		plan.setName(source.getName());
+		plan.setOrdered(source.isOrdered());
+		plan.getDeposit().clear();
+		plan.getDeposit().addAll(source.getDeposit());
+		plan.getWithdraw().clear();
+		plan.getWithdraw().addAll(source.getWithdraw());
+		saveChests();
+		clientThread.invokeLater(this::updateOpenChest);
+		refresh();
+	}
+
+	@Override
 	public void deleteChest(String key)
 	{
-		if (chests.remove(key))
+		if (book().remove(key))
 		{
 			saveChests();
 			clientThread.invokeLater(this::updateOpenChest);
@@ -1166,12 +1211,13 @@ public class CoxStoragePlannerPlugin extends Plugin implements CoxStoragePanel.A
 		state.countShared = config.countShared();
 		state.countSplit = config.countSplit();
 		state.units = config.needUnits();
-		state.chests = chests.copy(gson);
+		state.chests = book().copy(gson);
 		state.currentChest = currentChest;
 		state.marking = marking;
 		state.putBack = config.chestPutBack();
 		state.openChest = openChest;
 		state.separateSoloNeeds = config.separateSoloNeeds();
+		state.separateSoloChests = separateChests();
 		state.trackStamina = config.trackStamina();
 		state.solo = solo();
 		Needs needs = needsFor(state.solo);

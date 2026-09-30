@@ -65,6 +65,11 @@ public class CoxStoragePanelTest
 		public void copyLoadout(String key)
 		{
 		}
+
+		@Override
+		public void copyChestFromOther(String key)
+		{
+		}
 	};
 
 	private static PanelState busyRaid()
@@ -74,6 +79,7 @@ public class CoxStoragePanelTest
 		state.inventory = Supplies.of(new int[]{4, 8, 4, 0});
 		state.privateStorage = Supplies.of(new int[]{0, 4, 0, 4});
 		state.solo = true;
+		state.separateSoloChests = true;
 		state.units = NeedUnits.POTIONS;
 		Needs needs = Needs.soloDefaults();
 		for (Potion potion : Potion.values())

@@ -16,6 +16,8 @@ public interface CoxStoragePlannerConfig extends Config
 	String KEY_NEEDS_SOLO = "needsSolo";
 	String KEY_NEEDS_TAB_SOLO = "needsTabSolo";
 	String KEY_CHESTS = "chests";
+	String KEY_CHESTS_SOLO = "chestsSolo";
+	String KEY_SEPARATE_SOLO_CHESTS = "separateSoloChests";
 
 	@ConfigSection(
 		name = "Supplies",
@@ -191,12 +193,35 @@ public interface CoxStoragePlannerConfig extends Config
 	}
 
 	@ConfigItem(
+		keyName = KEY_SEPARATE_SOLO_CHESTS,
+		name = "Separate chests for solo raids",
+		description = "Keep a second set of chest plans for solo raids, picked by the raid's party size (the Team | Solo switch outside a raid). Starts as a copy of the team plans",
+		section = chestSection,
+		position = 8
+	)
+	default boolean separateSoloChests()
+	{
+		return false;
+	}
+
+	@ConfigItem(
 		keyName = KEY_CHESTS,
 		name = "Chests",
 		description = "Chest plans, edited in the sidebar",
 		hidden = true
 	)
 	default String chests()
+	{
+		return "";
+	}
+
+	@ConfigItem(
+		keyName = KEY_CHESTS_SOLO,
+		name = "Chests, solo",
+		description = "Chest plans for solo raids, edited in the sidebar",
+		hidden = true
+	)
+	default String chestsSolo()
 	{
 		return "";
 	}

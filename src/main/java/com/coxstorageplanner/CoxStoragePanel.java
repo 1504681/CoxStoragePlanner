@@ -60,6 +60,9 @@ class CoxStoragePanel extends PluginPanel
 
 		/** Replaces a chest's Take out with what's worn and carried right now, in order, and orders it. */
 		void copyLoadout(String key);
+
+		/** Replaces a chest's plan with the same chest's plan from the other set (team or solo). */
+		void copyChestFromOther(String key);
 	}
 
 	interface Icons
@@ -133,6 +136,10 @@ class CoxStoragePanel extends PluginPanel
 	private final Stack chestSteps = new Stack(null);
 	private String selectedChest;
 	private final JLabel chestHere = small("", MUTED);
+	/** Which set of chests is shown when solo raids have their own, with a chip to copy the other set's plan. */
+	private final JPanel chestSet = new JPanel(new BorderLayout());
+	private final JLabel chestSetLabel = small("", MUTED);
+	private JLabel chestSetCopy;
 	private final JCheckBox chestMark = new JCheckBox("Mark by clicking");
 	private final JPanel chestEditor = new JPanel(new BorderLayout());
 	private final List<String> chestKeys = new ArrayList<>();
@@ -377,6 +384,19 @@ class CoxStoragePanel extends PluginPanel
 	{
 		chestsBody.setBorder(new EmptyBorder(6, 6, 6, 6));
 		chestsBody.addRow(chestHere, 0);
+		chestSetCopy = chip("Copy from Team", ColorScheme.DARKER_GRAY_COLOR,
+			"Replace this chest's lists with the same chest's from the other set", () ->
+			{
+				if (selectedChest != null)
+				{
+					actions.copyChestFromOther(selectedChest);
+				}
+			});
+		chestSet.setOpaque(false);
+		chestSet.add(chestSetLabel, BorderLayout.WEST);
+		chestSet.add(chestSetCopy, BorderLayout.EAST);
+		chestSet.setVisible(false);
+		chestsBody.addRow(chestSet, 4);
 		chestMark.setOpaque(false);
 		chestMark.setFont(FontManager.getRunescapeSmallFont());
 		chestMark.setForeground(Color.WHITE);
@@ -544,6 +564,12 @@ class CoxStoragePanel extends PluginPanel
 			ChestPlan here = state.chests.get(state.currentChest);
 			chestHere.setText("At: " + (here == null ? CoxStoragePlannerPlugin.chestName(state.currentChest)
 				: here.getName()));
+		}
+		chestSet.setVisible(state.separateSoloChests);
+		if (state.separateSoloChests)
+		{
+			chestSetLabel.setText(state.solo ? "Solo raid chests" : "Team raid chests");
+			chestSetCopy.setText(state.solo ? "Copy from Team" : "Copy from Solo");
 		}
 		showChest(state);
 	}

@@ -29,6 +29,8 @@ final class PanelState
 	/** Whether the numbers are for a solo raid: the raid's size while in one, the tab otherwise. */
 	boolean solo;
 	boolean separateSoloNeeds;
+	/** Whether solo raids have their own chest plans, so {@link #chests} is the set for {@link #solo}. */
+	boolean separateSoloChests;
 	boolean trackStamina;
 	NeedUnits units = NeedUnits.POTIONS;
 	ChestBook chests = new ChestBook();
