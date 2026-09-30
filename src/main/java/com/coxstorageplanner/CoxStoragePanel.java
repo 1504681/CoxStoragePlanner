@@ -721,8 +721,10 @@ class CoxStoragePanel extends PluginPanel
 		teamTab.setForeground(state.solo ? MUTED : Color.WHITE);
 		soloTab.setForeground(state.solo ? Color.WHITE : MUTED);
 		String same = state.separateSoloNeeds ? "" : "<br>Same numbers for both until 'Separate doses for solo raids' is on in the settings";
-		teamTab.setToolTipText("<html>What you need for Olm in a team raid" + same + "</html>");
-		soloTab.setToolTipText("<html>What you need for Olm in a solo raid" + same + "</html>");
+		String chests = state.separateSoloChests ? " and the chest plans" : "";
+		String inRaid = state.inRaid ? "<br>Picked from the party size; click to use the other set for this raid" : "";
+		teamTab.setToolTipText("<html>What you need for Olm" + chests + " in a team raid" + same + inRaid + "</html>");
+		soloTab.setToolTipText("<html>What you need for Olm" + chests + " in a solo raid" + same + inRaid + "</html>");
 		rebuildStorageGrid(state);
 	}
 }

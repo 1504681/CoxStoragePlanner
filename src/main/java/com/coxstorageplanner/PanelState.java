@@ -28,6 +28,8 @@ final class PanelState
 	final Map<Potion, Integer> need = new EnumMap<>(Potion.class);
 	/** Whether the numbers are for a solo raid: the raid's size while in one, the tab otherwise. */
 	boolean solo;
+	/** Whether the player is in a raid, when the Team | Solo switch overrides the party size instead of being saved. */
+	boolean inRaid;
 	boolean separateSoloNeeds;
 	/** Whether solo raids have their own chest plans, so {@link #chests} is the set for {@link #solo}. */
 	boolean separateSoloChests;

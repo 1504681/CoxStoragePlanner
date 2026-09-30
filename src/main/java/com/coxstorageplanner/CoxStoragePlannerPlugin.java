@@ -156,6 +156,8 @@ public class CoxStoragePlannerPlugin extends Plugin implements CoxStoragePanel.A
 	private int closedStorageUntil;
 	private boolean inRaid;
 	private boolean soloRaid;
+	/** The Team | Solo switch clicked during a raid, overriding the party size until the raid ends; null to follow it. */
+	private volatile Boolean raidSoloOverride;
 	private int ticksOutside;
 	private int ticksSinceSend = SEND_INTERVAL;
 	private CoxStorageMessage lastSent;
@@ -501,6 +503,7 @@ public class CoxStoragePlannerPlugin extends Plugin implements CoxStoragePanel.A
 			if (!inRaid)
 			{
 				inRaid = true;
+				raidSoloOverride = null;
 				// what the client still holds is from an earlier raid until the storage is opened
 				inventoryDirty = true;
 			}
@@ -850,7 +853,11 @@ public class CoxStoragePlannerPlugin extends Plugin implements CoxStoragePanel.A
 	/** Whether the numbers should be the solo ones right now. */
 	private boolean solo()
 	{
-		return inRaid ? soloRaid : needsTabSolo;
+		if (!inRaid)
+		{
+			return needsTabSolo;
+		}
+		return raidSoloOverride != null ? raidSoloOverride : soloRaid;
 	}
 
 	/** The solo doses for the solo tab, or a solo raid, when they are kept apart. */
@@ -862,6 +869,7 @@ public class CoxStoragePlannerPlugin extends Plugin implements CoxStoragePanel.A
 	private void leftRaid()
 	{
 		soloRaid = false;
+		raidSoloOverride = null;
 		marking = false;
 		privateItems.clear();
 		roomKeys.clear();
@@ -1182,6 +1190,14 @@ public class CoxStoragePlannerPlugin extends Plugin implements CoxStoragePanel.A
 	@Override
 	public void setNeedsTab(boolean solo)
 	{
+		if (inRaid)
+		{
+			// in a raid the switch overrides the party size, say to run the solo chests in a team of two
+			raidSoloOverride = solo == soloRaid ? null : solo;
+			clientThread.invokeLater(this::updateOpenChest);
+			refresh();
+			return;
+		}
 		if (needsTabSolo != solo)
 		{
 			needsTabSolo = solo;
@@ -1220,6 +1236,7 @@ public class CoxStoragePlannerPlugin extends Plugin implements CoxStoragePanel.A
 		state.separateSoloChests = separateChests();
 		state.trackStamina = config.trackStamina();
 		state.solo = solo();
+		state.inRaid = inRaid;
 		Needs needs = needsFor(state.solo);
 		for (Potion potion : Potion.values())
 		{
