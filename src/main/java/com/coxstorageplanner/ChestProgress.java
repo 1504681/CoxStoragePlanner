@@ -31,19 +31,22 @@ public final class ChestProgress
 		public final int order;
 		/** A withdrawal skipped because the item is neither on you nor in the storage; done as well. */
 		public final boolean missing;
+		/** How many more still to move, so only that many light up; MAX_VALUE for all of them. */
+		public final int remaining;
 
-		Step(ChestPlan.Line line, boolean deposit, boolean done, int order)
+		Step(ChestPlan.Line line, boolean deposit, boolean done, int order, int remaining)
 		{
-			this(line, deposit, done, order, false);
+			this(line, deposit, done, order, false, remaining);
 		}
 
-		Step(ChestPlan.Line line, boolean deposit, boolean done, int order, boolean missing)
+		Step(ChestPlan.Line line, boolean deposit, boolean done, int order, boolean missing, int remaining)
 		{
 			this.line = line;
 			this.deposit = deposit;
 			this.done = done;
 			this.order = order;
 			this.missing = missing;
+			this.remaining = done ? 0 : remaining;
 		}
 	}
 
@@ -96,13 +99,15 @@ public final class ChestProgress
 		{
 			if (line.wear)
 			{
-				wears.add(new Step(line, false, count(line, worn) >= line.count, 0));
+				int on = count(line, worn);
+				wears.add(new Step(line, false, on >= line.count, 0, line.count - on));
 			}
 		}
 		List<Step> deposits = new ArrayList<>();
 		for (ChestPlan.Line line : ChestPlan.parse(plan.getDeposit()))
 		{
 			boolean done;
+			int remaining = Integer.MAX_VALUE;
 			if (line.everythingElse)
 			{
 				done = true;
@@ -114,10 +119,14 @@ public final class ChestProgress
 			else
 			{
 				int left = count(line, inventory);
-				done = left == 0 || (line.counted
-					&& (count(line, openedWith) - left >= line.count || count(line, held) >= line.count));
+				int in = Math.max(count(line, openedWith) - left, count(line, held));
+				done = left == 0 || (line.counted && in >= line.count);
+				if (line.counted)
+				{
+					remaining = line.count - in;
+				}
 			}
-			deposits.add(new Step(line, true, done, 0));
+			deposits.add(new Step(line, true, done, 0, remaining));
 		}
 		List<Step> withdrawals = new ArrayList<>();
 		Map<String, Integer> asked = new LinkedHashMap<>();
@@ -130,10 +139,11 @@ public final class ChestProgress
 			}
 			// "Xeric's aid" twice means two of them
 			int need = asked.merge(line.name.toLowerCase(Locale.ROOT), line.count, Integer::sum);
-			boolean done = count(line, inventory) + count(line, worn) >= need;
+			int have = count(line, inventory) + count(line, worn);
+			boolean done = have >= need;
 			// nowhere to get it from: skip the step rather than wait on it forever
 			boolean missing = !done && storage != null && count(line, storage) == 0;
-			withdrawals.add(new Step(line, false, done || missing, ++order, missing));
+			withdrawals.add(new Step(line, false, done || missing, ++order, missing, need - have));
 		}
 		List<String> outOfOrder = new ArrayList<>();
 		if (putBack && plan.isOrdered())
@@ -292,30 +302,41 @@ public final class ChestProgress
 	/** Whether an item, in the storage or the inventory, is gear still to put on. */
 	public boolean highlightsWear(String itemName)
 	{
+		return wearStep(itemName) != null;
+	}
+
+	/** The wear step an item, in the storage or the inventory, is gear still to put on for, or null. */
+	public Step wearStep(String itemName)
+	{
 		if (phase() != Phase.WEAR)
 		{
-			return false;
+			return null;
 		}
 		for (Step step : wears)
 		{
 			if (!step.done && step.line.matches(itemName))
 			{
-				return true;
+				return step;
 			}
 		}
-		return false;
+		return null;
 	}
 
 	/** Whether an item in the side inventory should light up: something still to put in. */
 	public boolean highlightsDeposit(String itemName)
 	{
+		return depositStep(itemName) != null || (phase() == Phase.DEPOSIT && outOfOrder.contains(itemName));
+	}
+
+	/**
+	 * The deposit step an item in the side inventory still has to go in for, or null. Something
+	 * carried out of order has no step; {@link #outOfOrder} lists it.
+	 */
+	public Step depositStep(String itemName)
+	{
 		if (phase() != Phase.DEPOSIT)
 		{
-			return false;
-		}
-		if (outOfOrder.contains(itemName))
-		{
-			return true;
+			return null;
 		}
 		List<ChestPlan.Line> takeOut = null;
 		for (Step step : deposits)
@@ -332,15 +353,15 @@ public final class ChestProgress
 				}
 				if (!keeps(takeOut, itemName))
 				{
-					return true;
+					return step;
 				}
 			}
 			else if (step.line.matches(itemName))
 			{
-				return true;
+				return step;
 			}
 		}
-		return false;
+		return null;
 	}
 
 	/**

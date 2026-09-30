@@ -221,6 +221,27 @@ public class ChestPlanTest
 	}
 
 	@Test
+	public void stepsSayHowManyAreStillToMove()
+	{
+		ChestPlan plan = new ChestPlan("RAIDS_ICE_DEMON#1", "Ice Demon");
+		plan.getDeposit().addAll(Arrays.asList("Endarkened*, 11", "Bronze dagger"));
+		plan.getWithdraw().addAll(Arrays.asList("wear Scythe of vitur", "Xeric's aid, 3", "Xeric's aid"));
+		Map<String, Integer> carried = ChestProgress.tally(Arrays.asList("Endarkened juice", "Endarkened juice", "Endarkened juice",
+			"Bronze dagger", "Bronze dagger", "Xeric's aid(4)"));
+		Map<String, Integer> none = Collections.emptyMap();
+		Map<String, Integer> storage = ChestProgress.tally(Arrays.asList("Endarkened juice", "Endarkened juice", "Endarkened juice",
+			"Endarkened juice", "Scythe of vitur", "Xeric's aid(4)", "Xeric's aid(4)", "Xeric's aid(4)", "Xeric's aid(4)"));
+		ChestProgress progress = new ChestProgress(plan, carried, none, carried, storage);
+		assertEquals(1, progress.wears.get(0).remaining);
+		assertEquals(7, progress.deposits.get(0).remaining);
+		assertEquals(Integer.MAX_VALUE, progress.deposits.get(1).remaining);
+		assertEquals(2, progress.withdrawals.get(0).remaining);
+		assertEquals(3, progress.withdrawals.get(1).remaining);
+		assertEquals(0, new ChestProgress(plan, carried, ChestProgress.tally(Arrays.asList("Scythe of vitur")), carried, storage)
+			.wears.get(0).remaining);
+	}
+
+	@Test
 	public void fullestPotionLightsFirst()
 	{
 		ChestPlan plan = new ChestPlan("RAIDS_END#2", "End 2");

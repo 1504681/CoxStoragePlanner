@@ -1,12 +1,15 @@
 package com.coxstorageplanner;
 
 import java.awt.Color;
+import java.awt.Dimension;
 import java.awt.Font;
 import java.awt.FontMetrics;
 import java.awt.Graphics2D;
 import java.awt.Rectangle;
 import java.awt.RenderingHints;
 import java.awt.image.BufferedImage;
+import java.util.IdentityHashMap;
+import java.util.Map;
 import javax.inject.Inject;
 import net.runelite.api.gameval.InterfaceID;
 import net.runelite.api.widgets.WidgetItem;
@@ -38,6 +41,28 @@ class ChestItemOverlay extends WidgetItemOverlay
 	/** Orb diameters for the next withdrawal, the one after and the one after that. The next one covers the item. */
 	private static final int[] ORB_SIZES = {28, 15, 10};
 
+	/** How much of each step has lit up so far this frame, so "Xeric's aid, 2" lights two and not the whole row. */
+	private final Map<ChestProgress.Step, Integer> lit = new IdentityHashMap<>();
+
+	@Override
+	public Dimension render(Graphics2D graphics)
+	{
+		lit.clear();
+		return super.render(graphics);
+	}
+
+	/** Whether this item is within the step's remaining count, counting it once it is. */
+	private boolean enough(ChestProgress.Step step, WidgetItem widgetItem)
+	{
+		int already = lit.getOrDefault(step, 0);
+		if (already >= step.remaining)
+		{
+			return true;
+		}
+		lit.put(step, already + Math.max(1, widgetItem.getQuantity()));
+		return false;
+	}
+
 	@Override
 	public void renderItemOverlay(Graphics2D graphics, int itemId, WidgetItem widgetItem)
 	{
@@ -56,15 +81,21 @@ class ChestItemOverlay extends WidgetItemOverlay
 		int order = 0;
 		int orb = 0;
 		boolean pulse;
-		if (progress.highlightsWear(name))
+		ChestProgress.Step wear = progress.wearStep(name);
+		if (wear != null)
 		{
 			// gear to put on, wherever it is
+			if (enough(wear, widgetItem))
+			{
+				return;
+			}
 			color = config.chestWearColor();
 			pulse = true;
 		}
 		else if (group == InterfaceID.RAIDS_STORAGE_SIDE)
 		{
-			if (!progress.highlightsDeposit(name))
+			ChestProgress.Step step = progress.depositStep(name);
+			if (step == null ? !progress.highlightsDeposit(name) : enough(step, widgetItem))
 			{
 				return;
 			}
@@ -75,7 +106,7 @@ class ChestItemOverlay extends WidgetItemOverlay
 		{
 			ChestGlow mode = config.chestOrderedGlow();
 			ChestProgress.Step step = progress.highlightsWithdraw(name, mode.getSteps());
-			if (step == null)
+			if (step == null || enough(step, widgetItem))
 			{
 				return;
 			}
