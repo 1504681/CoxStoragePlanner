@@ -34,8 +34,8 @@ class ChestItemOverlay extends WidgetItemOverlay
 		showOnInterfaces(InterfaceID.RAIDS_STORAGE_PRIVATE, InterfaceID.RAIDS_STORAGE_SHARED, InterfaceID.RAIDS_STORAGE_SIDE);
 	}
 
-	/** Orb diameters for the next withdrawal, the one after and the one after that. */
-	private static final int[] ORB_SIZES = {16, 12, 9};
+	/** Orb diameters for the next withdrawal, the one after and the one after that. The next one covers the item. */
+	private static final int[] ORB_SIZES = {28, 15, 10};
 
 	@Override
 	public void renderItemOverlay(Graphics2D graphics, int itemId, WidgetItem widgetItem)
@@ -113,20 +113,25 @@ class ChestItemOverlay extends WidgetItemOverlay
 		}
 	}
 
-	/** A filled circle in the top left corner of the item with the step number in it. */
+	/**
+	 * A filled circle with the step number in it: the biggest sits over the middle of the item so the
+	 * next click can't be missed, the smaller ones in the top left corner.
+	 */
 	private static void drawOrb(Graphics2D graphics, Rectangle bounds, int size, Color color, int order)
 	{
 		Object aa = graphics.getRenderingHint(RenderingHints.KEY_ANTIALIASING);
 		graphics.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
-		int x = bounds.x - 1;
-		int y = bounds.y - 1;
+		boolean centered = size >= ORB_SIZES[0];
+		int x = centered ? bounds.x + (bounds.width - size) / 2 : bounds.x - 1;
+		int y = centered ? bounds.y + (bounds.height - size) / 2 : bounds.y - 1;
+		int ring = centered ? 2 : 1;
 		graphics.setColor(new Color(0, 0, 0, Math.min(255, color.getAlpha())));
-		graphics.fillOval(x - 1, y - 1, size + 2, size + 2);
+		graphics.fillOval(x - ring, y - ring, size + 2 * ring, size + 2 * ring);
 		graphics.setColor(color);
 		graphics.fillOval(x, y, size, size);
 		graphics.setRenderingHint(RenderingHints.KEY_ANTIALIASING, aa);
 
-		Font font = size >= ORB_SIZES[0] ? FontManager.getRunescapeBoldFont() : FontManager.getRunescapeSmallFont();
+		Font font = centered ? FontManager.getRunescapeBoldFont().deriveFont(20f) : FontManager.getRunescapeSmallFont();
 		graphics.setFont(font);
 		String text = String.valueOf(order);
 		FontMetrics metrics = graphics.getFontMetrics();

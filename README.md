@@ -10,7 +10,7 @@ The easy way to fill the lists is to click: tick **Mark by clicking** and, with 
 
 The plugin starts with three chests filled in (the author's CM route: gear and Olm ingredients into Ice Demon, juice and stinkhorns out at Farming 1, gear and potions out in order at End 1). Edit or delete them as you like; they come back only if the plugin's chest setting is cleared.
 
-Tick **Withdraw in this order** and the list becomes steps 1, 2, 3. While the storage is open the items still to move glow: in the side inventory what goes in, in the storage what comes out. Ordered lists light the next three items, each with a numbered orb that gets smaller and fainter the further down the order it is; a setting switches that to only the next item, or to all of them in a gradient from the first colour to the last. Colours and the pulse are settings too, and there's an optional on-screen list of the steps.
+Tick **Withdraw in this order** and the list becomes steps 1, 2, 3. While the storage is open the items still to move glow: in the side inventory what goes in, in the storage what comes out. Ordered lists light the next three items: the next one gets a big numbered orb over the item, the two after it small ones in the corner, fainter the further down the order they are; a setting switches that to only the next item, or to all of them in a gradient from the first colour to the last. Colours and the pulse are settings too, and there's an optional on-screen list of the steps.
 
 ## Supplies
 
