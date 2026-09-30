@@ -542,7 +542,7 @@ class CoxStoragePanel extends PluginPanel
 		else
 		{
 			ChestPlan here = state.chests.get(state.currentChest);
-			chestHere.setText("At: " + (here == null ? CoxStoragePlannerPlugin.chestName(state.currentChest) + " (not set up yet, open it)"
+			chestHere.setText("At: " + (here == null ? CoxStoragePlannerPlugin.chestName(state.currentChest)
 				: here.getName()));
 		}
 		showChest(state);
