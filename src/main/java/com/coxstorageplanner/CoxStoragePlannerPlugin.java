@@ -548,8 +548,8 @@ public class CoxStoragePlannerPlugin extends Plugin implements CoxStoragePanel.A
 	/**
 	 * Works out which chest the player is at. A room is its template (RAIDS_FARMING, RAIDS_ICE_DEMON...)
 	 * and the two rooms of the same template are told apart by which came first this raid, which
-	 * is fixed in Challenge Mode. The floors are on different planes (upper floor 3, lower floor 2),
-	 * so the End room of each floor is its own chest. Room slots are 32x32 tile squares of the
+	 * is fixed in Challenge Mode. The floors are on different planes (first floor 3, second floor 2),
+	 * so the End and Farming rooms are numbered by floor. Room slots are 32x32 tile squares of the
 	 * instance; walking within a room that straddles two squares keeps the same key.
 	 */
 	private void trackRoom()
@@ -596,6 +596,11 @@ public class CoxStoragePlannerPlugin extends Plugin implements CoxStoragePanel.A
 					key = roomKeys.get(lastRoomSlot);
 				}
 			}
+			if (key == null && FLOOR_ROOMS.contains(room) && floor(world.getPlane()) > 0)
+			{
+				// one per floor, so the floor is the number whatever order the plugin saw them in
+				key = room + "#" + floor(world.getPlane());
+			}
 			if (key == null)
 			{
 				int n = 1;
@@ -621,6 +626,15 @@ public class CoxStoragePlannerPlugin extends Plugin implements CoxStoragePanel.A
 	/** Room templates a Challenge Mode raid has more than one of, so the first is "End 1" not "End". */
 	private static final Set<String> REPEATED_ROOMS = new HashSet<>(Arrays.asList(
 		"RAIDS_END", "RAIDS_FARMING", "RAIDS_SCAVENGERS"));
+
+	/** Rooms every floor has exactly one of, numbered by floor rather than by when they were first seen. */
+	private static final Set<String> FLOOR_ROOMS = new HashSet<>(Arrays.asList("RAIDS_END", "RAIDS_FARMING"));
+
+	/** The raid's first floor is on plane 3 and its second on plane 2; 0 for anything else (Olm, the lobby). */
+	static int floor(int plane)
+	{
+		return plane == 3 ? 1 : plane == 2 ? 2 : 0;
+	}
 
 	/** RAIDS_FARMING2 is a second layout of the farming room, not a second kind of room, so both count as RAIDS_FARMING. */
 	static String roomType(InstanceTemplates template)
