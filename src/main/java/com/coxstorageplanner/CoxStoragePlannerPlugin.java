@@ -74,7 +74,7 @@ import net.runelite.client.util.Text;
 public class CoxStoragePlannerPlugin extends Plugin implements CoxStoragePanel.Actions
 {
 	// keep in sync with build.gradle
-	public static final String VERSION = "1.3.1";
+	public static final String VERSION = "1.3.2";
 
 	/** Ticks outside before a raid counts as left, so a relog or a reload doesn't wipe the raid's state. */
 	private static final int LEAVE_TICKS = 5;
@@ -796,7 +796,7 @@ public class CoxStoragePlannerPlugin extends Plugin implements CoxStoragePanel.A
 
 	/**
 	 * Whether the chest for a storage unit is all done, null when it's not in the current room or
-	 * has no plan. The one in the room is the one in the same 32-tile square as the player, or the
+	 * has no plan. Done is having the right things, in whatever inventory slots. The one in the room is the one in the same 32-tile square as the player, or the
 	 * open storage, whichever.
 	 */
 	Boolean chestDoneAt(GameObject storage)
@@ -815,7 +815,7 @@ public class CoxStoragePlannerPlugin extends Plugin implements CoxStoragePanel.A
 			return null;
 		}
 		ChestProgress progress = shutProgress(key);
-		return progress == null ? null : progress.isDone();
+		return progress == null ? null : progress.isStocked();
 	}
 
 	/**

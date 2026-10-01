@@ -80,17 +80,16 @@ public interface CoxStoragePlannerConfig extends Config
 		return 4;
 	}
 
-	@Range(min = 1, max = 4)
 	@ConfigItem(
 		keyName = "chestGlowWidth",
 		name = "Outline thickness",
-		description = "How thick the outline around a glowing item is, in pixels",
+		description = "How thick the outline around a glowing item is, in pixels, from 1 to 4. A half is a fainter pixel: 1.5 is one pixel with a faint second around it",
 		section = chestSection,
 		position = 10
 	)
-	default int chestGlowWidth()
+	default double chestGlowWidth()
 	{
-		return 2;
+		return 1.5;
 	}
 
 	@ConfigItem(

@@ -159,6 +159,8 @@ public final class ChestProgress
 	private final Carried carried;
 	/** With a layout, the withdrawals that can be made now, in click order. */
 	private final List<Click> queue;
+	/** With a layout, the same plan going by counts alone: what's carried, whatever slot it's in. */
+	private final ChestProgress counts;
 	private final Set<String> stackable;
 
 	public ChestProgress(ChestPlan plan, Map<String, Integer> inventory)
@@ -251,6 +253,7 @@ public final class ChestProgress
 				stackable, carried.withdrawing)
 			: null;
 		this.layout = layout;
+		this.counts = layout == null ? null : new ChestProgress(plan, inventory, worn, openedWith, storage, false, stackable, carried);
 
 		List<Step> deposits = new ArrayList<>();
 		List<Step> withdrawals = new ArrayList<>();
@@ -583,6 +586,15 @@ public final class ChestProgress
 	public boolean isDone()
 	{
 		return allDone(wears) && (layout != null ? layout.done() : allDone(deposits) && outOfOrder.isEmpty() && allDone(withdrawals));
+	}
+
+	/**
+	 * Whether the chest has been seen to: the gear is on, what goes in is in and what comes out is
+	 * carried, in whatever slots. A plan held to the slot can have this and still not be {@link #isDone}.
+	 */
+	public boolean isStocked()
+	{
+		return counts == null ? isDone() : counts.isDone();
 	}
 
 	/** Whether an item, in the storage or the inventory, is gear still to put on. */

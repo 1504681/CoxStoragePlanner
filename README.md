@@ -18,7 +18,7 @@ A private storage holds 25 items (tiny) to 120 (massive), every item taking a sl
 
 With *Separate chests for solo raids* on, solo raids get their own set of chest plans (it starts as a copy of the team ones): inside a raid the party size picks the set (click the **Team | Solo** switch to override it for that raid), outside it the switch does.
 
-Tick **Ordered withdrawal** and the list becomes clicks 1, 2, 3. While the storage is open the items still to move glow: in the side inventory what goes in, in the storage what comes out. Every click has its own number, and a step whose item isn't anywhere (not on you, not in the storage) takes none. Clicking any of several identical items in the storage takes the first of them and leaves the rest in place, so only the last of a kind lights: `Xeric's aid, 3` is that one aid with `x3` in its corner, clicked three times while its number counts up. A stack is one click whatever the count. The next four clicks light (*Clicks shown*): the next one gets a big orb over the item, the ones after it small ones in the corner. The colour runs from the glow colour on click 1 to the end colour on the last click, so it shows how far along you are. A setting switches the glow to only the next click, or to all of them; *Outline thickness* sets how heavy the outline is. When the next item is scrolled out of view, the storage's scroll arrow lights, up or down (setting). The storage unit in the room you're in carries a `?` while its chest still has something to wear, put in or take out, and a green tick once the inventory says it's all done (setting).
+Tick **Ordered withdrawal** and the list becomes clicks 1, 2, 3. While the storage is open the items still to move glow: in the side inventory what goes in, in the storage what comes out. Every click has its own number, and a step whose item isn't anywhere (not on you, not in the storage) takes none. Clicking any of several identical items in the storage takes the first of them and leaves the rest in place, so only the last of a kind lights: `Xeric's aid, 3` is that one aid with `x3` in its corner, clicked three times while its number counts up. A stack is one click whatever the count. The next four clicks light (*Clicks shown*): the next one gets a big orb over the item, the ones after it small ones in the corner. The colour runs from the glow colour on click 1 to the end colour on the last click, so it shows how far along you are. A setting switches the glow to only the next click, or to all of them; *Outline thickness* sets how heavy the outline is. When the next item is scrolled out of view, the storage's scroll arrow lights, up or down (setting). The storage unit in the room you're in carries a `?` while its chest still has something to wear, put in or take out, and a green tick once the inventory says it's all done (setting); the mark only asks for the right items, not for the right slots.
 
 Under the lists the sidebar shows the plan as icons, what goes in and what comes out, `…` after the fourth. An item gets its icon once the plugin has seen it in a raid; until then the start of its name stands in.
 
@@ -49,7 +49,7 @@ The game only sends a storage's contents while its interface is open, so both st
 | Organise the inventory | on |
 | Separate chests for solo raids | off |
 | Glow colour / end colour / wear colour | yellow / green / purple |
-| Outline thickness | 2 |
+| Outline thickness | 1.5 |
 | Pulse | on |
 | **Sidebar** | |
 | Hide away from the Chambers | on |
@@ -62,6 +62,10 @@ The game only sends a storage's contents while its interface is open, so both st
 | Count split overloads | on |
 
 ## Changelog
+
+1.3.2
+- The ? over the storage unit turns into the tick once the right items are carried, whatever slots they're in.
+- *Outline thickness* takes halves and defaults to 1.5.
 
 1.3.1
 - Two neighbouring items of an ordered list carried the wrong way round are left alone.

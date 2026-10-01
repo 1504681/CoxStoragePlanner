@@ -486,6 +486,23 @@ public class ChestLayoutTest
 	}
 
 	@Test
+	public void theRightItemsInTheWrongSlotsAreStocked()
+	{
+		// what the mark over the storage unit goes by: the items, not their slots
+		ChestPlan plan = plan("everything else", "Gear a", "Gear b", "Gear c", "Gear d");
+		Game game = new Game(plan, 25, Collections.emptySet(), "Gear d", "Gear b", "Gear a", "Gear c");
+		ChestProgress progress = game.progress();
+		assertFalse(progress.isDone());
+		assertTrue(progress.isStocked());
+		// something still to put in, or to take out, and it isn't
+		game.slots[5] = "Shark";
+		game.quantities[5] = 1;
+		assertFalse(game.progress().isStocked());
+		game = new Game(plan, 25, Collections.emptySet(), "Gear d", "Gear b", "Gear a").store("Gear c", 1);
+		assertFalse(game.progress().isStocked());
+	}
+
+	@Test
 	public void neighboursTheWrongWayRoundAreFine()
 	{
 		ChestPlan plan = plan("everything else", "Gear a", "Gear b", "Gear c", "Gear d");

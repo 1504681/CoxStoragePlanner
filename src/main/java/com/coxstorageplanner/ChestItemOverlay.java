@@ -1,6 +1,8 @@
 package com.coxstorageplanner;
 
+import java.awt.AlphaComposite;
 import java.awt.Color;
+import java.awt.Composite;
 import java.awt.Dimension;
 import java.awt.Font;
 import java.awt.FontMetrics;
@@ -324,18 +326,23 @@ class ChestItemOverlay extends WidgetItemOverlay
 		}
 		Rectangle bounds = widgetItem.getCanvasBounds();
 		BufferedImage outline = itemManager.getItemOutline(itemId, widgetItem.getQuantity(), color);
-		// thicker is the same outline again, shifted a pixel each way
-		int reach = Math.max(1, Math.min(4, config.chestGlowWidth())) - 1;
+		// thicker is the same outline again, shifted a pixel each way; half a pixel is one at half strength
+		double width = Math.max(1, Math.min(4, config.chestGlowWidth()));
+		int reach = (int) Math.ceil(width - 1);
+		Composite composite = graphics.getComposite();
 		for (int dx = -reach; dx <= reach; dx++)
 		{
 			for (int dy = -reach; dy <= reach; dy++)
 			{
-				if (Math.abs(dx) + Math.abs(dy) <= reach)
+				float strength = (float) Math.min(1, width - Math.abs(dx) - Math.abs(dy));
+				if (strength > 0)
 				{
+					graphics.setComposite(AlphaComposite.getInstance(AlphaComposite.SRC_OVER, strength));
 					graphics.drawImage(outline, bounds.x + dx, bounds.y + dy, null);
 				}
 			}
 		}
+		graphics.setComposite(composite);
 		if (order > 0)
 		{
 			drawOrb(graphics, bounds, orb, color, order);
