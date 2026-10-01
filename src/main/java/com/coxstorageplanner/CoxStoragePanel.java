@@ -414,7 +414,7 @@ class CoxStoragePanel extends PluginPanel
 			}
 		}), BorderLayout.EAST);
 
-		check(chestMark, "<html>While on, left-clicking an item in a storage adds it to Take out and one in your inventory to Put in."
+		check(chestMark, "<html>While on, left-clicking an item in a storage adds it to Withdraw and one in your inventory to Deposit."
 			+ "<br>Each click adds one more; Unmark on the right-click menu takes one away. Off again when you leave the raid.</html>");
 		chestMark.addActionListener(e ->
 		{
@@ -424,7 +424,7 @@ class CoxStoragePanel extends PluginPanel
 			}
 		});
 
-		check(chestOrdered, "Take things out top to bottom; every click gets its number in the storage and the next one is lit up");
+		check(chestOrdered, "Withdraw top to bottom; every click gets its number in the storage and the next one is lit up");
 		chestOrdered.addActionListener(e ->
 		{
 			if (!updating && selectedChest != null)
@@ -436,14 +436,14 @@ class CoxStoragePanel extends PluginPanel
 		Stack editor = new Stack(null);
 		editor.addRow(chooser, 0);
 		editor.addRow(chestMark, 8);
-		editor.addRow(text("Put in", ColorScheme.BRAND_ORANGE), 2);
+		editor.addRow(text("Deposit", ColorScheme.BRAND_ORANGE), 2);
 		editor.addRow(listArea(chestDeposit, true), 3);
 		editor.addRow(chestOrdered, 8);
 		JPanel takeOut = new JPanel(new BorderLayout());
 		takeOut.setOpaque(false);
-		takeOut.add(text("Take out", ColorScheme.BRAND_ORANGE), BorderLayout.WEST);
+		takeOut.add(text("Withdraw", ColorScheme.BRAND_ORANGE), BorderLayout.WEST);
 		takeOut.add(chip("Copy my loadout", ColorScheme.DARK_GRAY_COLOR,
-			"<html>Replace Take out with what you're wearing and carrying right now, in order,<br>"
+			"<html>Replace Withdraw with what you're wearing and carrying right now, in order,<br>"
 				+ "and tick Ordered withdrawal. Withdrawing it that way rebuilds the same inventory.</html>", () ->
 			{
 				if (selectedChest != null)
@@ -478,7 +478,7 @@ class CoxStoragePanel extends PluginPanel
 		area.setMargin(new Insets(4, 4, 4, 4));
 		area.setToolTipText("<html>One item per line, matched from the start of its name, so 'Xeric's aid' is any dose."
 			+ "<br>* and ? are wildcards: '*chinchompa', 'Dragon *'. 'Stinkhorn mushroom, 3' for a number, 'Ayak | Sang* staff*' for either"
-			+ (deposit ? ", 'everything' to empty the inventory, 'everything else' to put away what Take out doesn't keep"
+			+ (deposit ? ", 'everything' to empty the inventory, 'everything else' to deposit what Withdraw doesn't keep"
 			: ", 'wear Scythe of vitur' for gear to put on first") + ".</html>");
 		// saved as you type, so the lists count even if the game canvas never takes the focus back
 		area.getDocument().addDocumentListener(new DocumentListener()
@@ -543,7 +543,7 @@ class CoxStoragePanel extends PluginPanel
 		actions.selectChest(selectedChest);
 		if (plans.isEmpty())
 		{
-			chestHere.setText("<html>Open a storage unit in a raid and it shows up here, with a list of what to put in and take out.</html>");
+			chestHere.setText("<html>Open a storage unit in a raid and it shows up here, with a list of what to deposit and withdraw.</html>");
 		}
 		else if (state.currentChest == null)
 		{
@@ -584,7 +584,7 @@ class CoxStoragePanel extends PluginPanel
 			ChestProgress.Step next = progress.next();
 			if (progress.blocked)
 			{
-				chestSteps.addRow(stepRow("Storage full, nothing to take out: make room", BAD), 0);
+				chestSteps.addRow(stepRow("Storage full, nothing to withdraw: make room", BAD), 0);
 			}
 			else if (progress.free >= 0)
 			{
@@ -597,16 +597,16 @@ class CoxStoragePanel extends PluginPanel
 			}
 			for (ChestProgress.Step step : progress.deposits)
 			{
-				chestSteps.addRow(stepRow((step.done ? "✓ " : "• ") + "in: " + step.line.text, step.done ? GOOD : Color.WHITE), 0);
+				chestSteps.addRow(stepRow((step.done ? "✓ " : "• ") + "deposit: " + step.line.text, step.done ? GOOD : Color.WHITE), 0);
 			}
 			for (String name : progress.outOfOrder)
 			{
-				chestSteps.addRow(stepRow("• back in: " + name + (progress.exact() ? " (wrong slot)" : " (comes later)"), WARN), 0);
+				chestSteps.addRow(stepRow("• redeposit: " + name + (progress.exact() ? " (wrong slot)" : " (comes later)"), WARN), 0);
 			}
 			for (ChestProgress.Step step : progress.withdrawals)
 			{
 				String prefix = step.missing ? "– " : step.done ? "✓ " : step == next ? "→ " : "• ";
-				chestSteps.addRow(stepRow(prefix + (plan.isOrdered() ? step.order + ". " : "out: ") + step.line.text
+				chestSteps.addRow(stepRow(prefix + (plan.isOrdered() ? step.order + ". " : "withdraw: ") + step.line.text
 					+ (step.missing ? " (not here)" : ""),
 					step.missing ? MUTED : step.done ? GOOD : step == next ? WARN : Color.WHITE), 0);
 			}
@@ -653,11 +653,11 @@ class CoxStoragePanel extends PluginPanel
 		chestFlow.clear();
 		if (!in.isEmpty())
 		{
-			chestFlow.addRow(flowRow("In", in, state), 0);
+			chestFlow.addRow(flowRow("Deposit", in, state), 0);
 		}
 		if (!out.isEmpty())
 		{
-			chestFlow.addRow(flowRow("Out", out, state), in.isEmpty() ? 0 : 4);
+			chestFlow.addRow(flowRow("Withdraw", out, state), in.isEmpty() ? 0 : 4);
 		}
 	}
 
@@ -665,9 +665,6 @@ class CoxStoragePanel extends PluginPanel
 	{
 		JPanel row = new JPanel(new FlowLayout(FlowLayout.LEFT, 2, 0));
 		row.setOpaque(false);
-		JLabel label = text(title, MUTED);
-		label.setPreferredSize(new Dimension(26, 32));
-		row.add(label);
 		StringBuilder all = new StringBuilder("<html>");
 		for (int i = 0; i < lines.size(); i++)
 		{
@@ -704,7 +701,12 @@ class CoxStoragePanel extends PluginPanel
 			row.add(more);
 		}
 		row.setToolTipText(all + "</html>");
-		return row;
+		// the title goes over the icons: beside them the row is wider than the sidebar
+		JPanel titled = new JPanel(new BorderLayout(0, 2));
+		titled.setOpaque(false);
+		titled.add(small(title, MUTED), BorderLayout.NORTH);
+		titled.add(row, BorderLayout.CENTER);
+		return titled;
 	}
 
 	private static void setIfIdle(javax.swing.text.JTextComponent field, String text)

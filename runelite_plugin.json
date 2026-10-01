@@ -4,7 +4,7 @@
   ],
   "displayName": "CoX Storage Planner",
   "author": "1504681",
-  "description": "Plan what to put in and take out of each Chambers of Xeric storage unit, and track the doses you need for Olm",
+  "description": "Plan what to deposit and withdraw at each Chambers of Xeric storage unit, and track the doses you need for Olm",
   "tags": [
     "cox",
     "chambers",
@@ -18,5 +18,5 @@
     "supplies",
     "party"
   ],
-  "version": "1.2.0"
+  "version": "1.2.1"
 }

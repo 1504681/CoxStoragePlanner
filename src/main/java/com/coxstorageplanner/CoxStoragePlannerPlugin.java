@@ -68,13 +68,13 @@ import net.runelite.client.util.Text;
 @Slf4j
 @PluginDescriptor(
 	name = "CoX Storage Planner",
-	description = "Plan what to put in and take out of each Chambers of Xeric storage unit, and track the doses you need for Olm",
+	description = "Plan what to deposit and withdraw at each Chambers of Xeric storage unit, and track the doses you need for Olm",
 	tags = {"cox", "chambers", "xeric", "raids", "cm", "challenge mode", "storage", "chest", "overload", "supplies", "party"}
 )
 public class CoxStoragePlannerPlugin extends Plugin implements CoxStoragePanel.Actions
 {
 	// keep in sync with build.gradle
-	public static final String VERSION = "1.2.0";
+	public static final String VERSION = "1.2.1";
 
 	/** Ticks outside before a raid counts as left, so a relog or a reload doesn't wipe the raid's state. */
 	private static final int LEAVE_TICKS = 5;
@@ -422,7 +422,7 @@ public class CoxStoragePlannerPlugin extends Plugin implements CoxStoragePanel.A
 				return;
 			}
 			String target = entry.getTarget();
-			String list = deposit ? "put in" : "take out";
+			String list = deposit ? "deposit" : "withdraw";
 			client.getMenu().createMenuEntry(-1)
 				.setOption("Unmark " + list)
 				.setTarget(target)
