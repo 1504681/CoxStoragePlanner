@@ -27,6 +27,7 @@ import net.runelite.api.Item;
 import net.runelite.api.ItemContainer;
 import net.runelite.api.MenuAction;
 import net.runelite.api.MenuEntry;
+import net.runelite.api.ObjectComposition;
 import net.runelite.api.Player;
 import net.runelite.api.WorldView;
 import net.runelite.api.coords.LocalPoint;
@@ -132,7 +133,7 @@ public class CoxStoragePlannerPlugin extends Plugin implements CoxStoragePanel.A
 	private final List<GameObject> storageUnits = new ArrayList<>();
 	/** Template chunks inside the raid the room table didn't know, logged once each. */
 	private final Set<Integer> unknownChunks = new HashSet<>();
-	private final Map<Integer, String> itemNames = new HashMap<>();
+	private final Map<Integer, String> itemNames = new java.util.concurrent.ConcurrentHashMap<>();
 	/** While on, left-clicking an item in a storage or the inventory adds it to the chest's lists. */
 	private volatile boolean marking;
 	/** The chest picked in the sidebar, marked from the inventory when no storage is open. */
@@ -153,10 +154,14 @@ public class CoxStoragePlannerPlugin extends Plugin implements CoxStoragePanel.A
 	private Map<String, Integer> wornItems = Collections.emptyMap();
 	/** The inventory when the storage was opened, so a "put in, N" line knows how many went in. */
 	private Map<String, Integer> openedWith = Collections.emptyMap();
+	/** The inventory when each chest's storage was last opened this raid, so its state can be judged after it closes. */
+	private final Map<String, Map<String, Integer>> openedWithByChest = new HashMap<>();
+	/** Whether a chest's storage was opened this raid: before that, the private storage's contents are unknown. */
+	private final Set<String> openedChests = new HashSet<>();
 
 	// client thread only
 	/** What's in the private storage, by item id, as last seen or worked out from deposits. */
-	private final Map<Integer, Integer> privateItems = new HashMap<>();
+	private final Map<Integer, Integer> privateItems = new java.util.concurrent.ConcurrentHashMap<>();
 	/** Item counts in the inventory at the last inventory change, to see what a deposit moved. */
 	private final Map<Integer, Integer> lastInventory = new HashMap<>();
 	/** The storage interface that is open (its group id), 0 for none. */
@@ -282,6 +287,8 @@ public class CoxStoragePlannerPlugin extends Plugin implements CoxStoragePanel.A
 						if (item.getId() > 0)
 						{
 							privateItems.merge(item.getId(), item.getQuantity(), Integer::sum);
+							// named here, on the client thread, so the sidebar can tally the storage later
+							itemName(item.getId());
 						}
 					}
 					publishPrivateStorage();
@@ -314,6 +321,11 @@ public class CoxStoragePlannerPlugin extends Plugin implements CoxStoragePanel.A
 				openedWith = inventoryItems;
 			}
 			String key = currentChest;
+			if (key != null)
+			{
+				openedWithByChest.put(key, openedWith);
+				openedChests.add(key);
+			}
 			if (key != null && book().get(key) == null && book().getOrCreate(key, chestName(key)) != null)
 			{
 				saveChests();
@@ -564,10 +576,23 @@ public class CoxStoragePlannerPlugin extends Plugin implements CoxStoragePanel.A
 	@Subscribe
 	public void onGameObjectSpawned(GameObjectSpawned event)
 	{
-		if (isStorageUnit(event.getGameObject().getId()))
+		int id = event.getGameObject().getId();
+		// a storage unit is built on a hotspot, which a varbit turns into the small, medium or large one
+		if (isStorageUnit(id) || id == ObjectID.RAIDS_STORAGE_HOTSPOT)
 		{
 			storageUnits.add(event.getGameObject());
 		}
+	}
+
+	/** Whether an object is a built storage unit right now, looking through a hotspot to what it shows. */
+	private boolean isBuiltStorage(GameObject object)
+	{
+		ObjectComposition def = client.getObjectDefinition(object.getId());
+		if (def != null && def.getImpostorIds() != null)
+		{
+			def = def.getImpostor();
+		}
+		return def != null && isStorageUnit(def.getId());
 	}
 
 	@Subscribe
@@ -606,28 +631,51 @@ public class CoxStoragePlannerPlugin extends Plugin implements CoxStoragePanel.A
 		WorldPoint here = player.getWorldLocation();
 		WorldPoint there = storage.getWorldLocation();
 		if (there.getPlane() != here.getPlane() || Math.floorDiv(there.getX(), 32) != Math.floorDiv(here.getX(), 32)
-			|| Math.floorDiv(there.getY(), 32) != Math.floorDiv(here.getY(), 32))
+			|| Math.floorDiv(there.getY(), 32) != Math.floorDiv(here.getY(), 32) || !isBuiltStorage(storage))
 		{
 			return null;
 		}
+		ChestProgress progress = progressFor(key);
+		return progress == null ? null : progress.isDone();
+	}
+
+	/**
+	 * A chest's progress: the open storage's when that's the one, else judged from the inventory, and
+	 * from the private storage's tracked contents if it has been opened here this raid. Null without a plan.
+	 */
+	private ChestProgress progressFor(String key)
+	{
 		ChestProgress progress = openChest;
-		if (progress == null || !progress.plan.getKey().equals(key))
+		if (progress != null && progress.plan.getKey().equals(key))
 		{
-			ChestPlan plan = book().get(key);
-			if (plan == null || (plan.getDeposit().isEmpty() && plan.getWithdraw().isEmpty()))
-			{
-				return null;
-			}
-			Map<String, Integer> items;
-			Map<String, Integer> worn;
-			synchronized (lock)
-			{
-				items = inventoryItems;
-				worn = wornItems;
-			}
-			progress = new ChestProgress(plan, items, worn, items, null, config.chestPutBack());
+			return progress;
 		}
-		return progress.isDone();
+		ChestPlan plan = book().get(key);
+		if (plan == null || (plan.getDeposit().isEmpty() && plan.getWithdraw().isEmpty()))
+		{
+			return null;
+		}
+		Map<String, Integer> items;
+		Map<String, Integer> worn;
+		synchronized (lock)
+		{
+			items = inventoryItems;
+			worn = wornItems;
+		}
+		boolean opened = openedChests.contains(key);
+		Map<String, Integer> before = openedWithByChest.getOrDefault(key, items);
+		return new ChestProgress(plan, items, worn, before, opened ? privateTally() : null, config.chestPutBack());
+	}
+
+	/** The private storage's tracked contents by item name. */
+	private Map<String, Integer> privateTally()
+	{
+		Map<String, Integer> items = new LinkedHashMap<>();
+		for (Map.Entry<Integer, Integer> e : privateItems.entrySet())
+		{
+			items.merge(itemName(e.getKey()), e.getValue(), Integer::sum);
+		}
+		return items;
 	}
 
 	private void trackRoom()
@@ -957,6 +1005,8 @@ public class CoxStoragePlannerPlugin extends Plugin implements CoxStoragePanel.A
 	{
 		soloRaid = false;
 		raidSoloOverride = null;
+		openedWithByChest.clear();
+		openedChests.clear();
 		marking = false;
 		privateItems.clear();
 		roomKeys.clear();
@@ -1318,7 +1368,7 @@ public class CoxStoragePlannerPlugin extends Plugin implements CoxStoragePanel.A
 		state.currentChest = currentChest;
 		state.marking = marking;
 		state.putBack = config.chestPutBack();
-		state.openChest = openChest;
+		state.openChest = openChest != null || currentChest == null ? openChest : progressFor(currentChest);
 		state.separateSoloNeeds = config.separateSoloNeeds();
 		state.separateSoloChests = separateChests();
 		state.trackStamina = config.trackStamina();
