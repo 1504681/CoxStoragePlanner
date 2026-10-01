@@ -12,8 +12,9 @@ public class NeedsTest
 	{
 		Needs needs = Needs.defaults();
 		assertEquals(24, needs.get(Potion.XERICS_AID));
-		assertEquals(0, needs.get(Potion.STAMINA));
-		assertEquals(4, Needs.soloDefaults().get(Potion.STAMINA));
+		assertEquals(16, Needs.soloDefaults().get(Potion.REVITALISATION));
+		// a potion an older version stored is dropped, not an error
+		assertEquals(8, Needs.parse("STAMINA:4,OVERLOAD:8", Needs.defaults()).get(Potion.OVERLOAD));
 		assertEquals(needs.encode(), Needs.parse("", Needs.defaults()).encode());
 		assertEquals(needs.encode(), Needs.parse(null, Needs.defaults()).encode());
 	}

@@ -32,11 +32,6 @@ public class CoxStoragePanelTest
 		}
 
 		@Override
-		public void renameChest(String key, String name)
-		{
-		}
-
-		@Override
 		public void setChestOrdered(String key, boolean ordered)
 		{
 		}
@@ -65,11 +60,6 @@ public class CoxStoragePanelTest
 		public void copyLoadout(String key)
 		{
 		}
-
-		@Override
-		public void copyChestFromOther(String key)
-		{
-		}
 	};
 
 	private static PanelState busyRaid()
@@ -80,17 +70,22 @@ public class CoxStoragePanelTest
 		state.privateStorage = Supplies.of(new int[]{0, 4, 0, 4});
 		state.solo = true;
 		state.separateSoloChests = true;
+		state.suppliesTracker = true;
+		state.inRaid = true;
+		state.lineIcons.put("xeric's aid", 20984);
+		state.lineIcons.put("stinkhorn mushroom", 20892);
+		state.lineIcons.put("noxifer", 20901);
 		state.units = NeedUnits.POTIONS;
 		Needs needs = Needs.soloDefaults();
 		for (Potion potion : Potion.values())
 		{
-			state.need.put(potion, state.applies(potion) ? needs.get(potion) : 0);
+			state.need.put(potion, potion.isSupply() ? needs.get(potion) : 0);
 		}
 		ChestPlan ice = state.chests.getOrCreate("RAIDS_ICE_DEMON#1", "Ice Demon");
 		ice.getDeposit().add("Elder maul");
 		ChestPlan farm = state.chests.getOrCreate("RAIDS_FARMING#1", "Farming 1");
-		farm.getDeposit().add("everything");
-		farm.getWithdraw().addAll(Arrays.asList("Xeric's aid, 2", "Stinkhorn mushroom, 3", "Noxifer"));
+		farm.getDeposit().add("everything else");
+		farm.getWithdraw().addAll(Arrays.asList("wear Scythe of vitur", "Xeric's aid, 2", "Stinkhorn mushroom, 3", "Noxifer", "Overload", "Prayer enhance"));
 		farm.setOrdered(true);
 		state.currentChest = "RAIDS_FARMING#1";
 		state.marking = true;
@@ -147,7 +142,7 @@ public class CoxStoragePanelTest
 		int[] rightEdge = new int[1];
 		SwingUtilities.invokeAndWait(() ->
 		{
-			CoxStoragePanel panel = new CoxStoragePanel(NO_ACTIONS, (label, itemId) ->
+			CoxStoragePanel panel = new CoxStoragePanel(NO_ACTIONS, (label, itemId, quantity) ->
 			{
 				BufferedImage square = new BufferedImage(36, 32, BufferedImage.TYPE_INT_ARGB);
 				Graphics2D g = square.createGraphics();

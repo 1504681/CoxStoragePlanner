@@ -18,20 +18,188 @@ public interface CoxStoragePlannerConfig extends Config
 	String KEY_CHESTS = "chests";
 	String KEY_CHESTS_SOLO = "chestsSolo";
 	String KEY_SEPARATE_SOLO_CHESTS = "separateSoloChests";
-
-	@ConfigSection(
-		name = "Supplies",
-		description = "What counts towards the doses you need for Olm. The doses themselves are set in the sidebar.",
-		position = 0
-	)
-	String needSection = "need";
+	String KEY_ICONS = "lineIcons";
 
 	@ConfigSection(
 		name = "Chests",
 		description = "Deposit and withdraw lists per storage unit, set up in the sidebar",
-		position = 1
+		position = 0
 	)
 	String chestSection = "chests";
+
+	@ConfigSection(
+		name = "Sidebar",
+		description = "When the sidebar icon shows and what's in the panel",
+		position = 1
+	)
+	String sidebarSection = "sidebar";
+
+	@ConfigSection(
+		name = "Supplies tracker",
+		description = "For the supplies tracker in the sidebar (Sidebar > Supplies tracker): what counts towards the doses you want for Olm",
+		position = 2,
+		closedByDefault = true
+	)
+	String needSection = "need";
+
+	@ConfigItem(
+		keyName = "chestGlow",
+		name = "Glow items",
+		description = "Outline the items still to move in the storage and the inventory",
+		section = chestSection,
+		position = 0
+	)
+	default boolean chestGlow()
+	{
+		return true;
+	}
+
+	@ConfigItem(
+		keyName = "chestOrderedGlow",
+		name = "Ordered withdrawal glow",
+		description = "With an ordered withdrawal: glow just the next click, the next four with the biggest orb on the next one, or all of them. The orbs go from the glow colour to the end colour",
+		section = chestSection,
+		position = 1
+	)
+	default ChestGlow chestOrderedGlow()
+	{
+		return ChestGlow.NEXT_FOUR;
+	}
+
+	@ConfigItem(
+		keyName = "chestScrollHint",
+		name = "Light the scroll arrow",
+		description = "When the next item to click is scrolled out of view in the storage, light the scroll bar's up or down arrow",
+		section = chestSection,
+		position = 2
+	)
+	default boolean chestScrollHint()
+	{
+		return true;
+	}
+
+	@ConfigItem(
+		keyName = "chestMarkers",
+		name = "? and tick over the storage unit",
+		description = "Draw a ? over the storage unit in your room while its chest has things to do, and a green tick once it's all done",
+		section = chestSection,
+		position = 3
+	)
+	default boolean chestMarkers()
+	{
+		return true;
+	}
+
+	@ConfigItem(
+		keyName = "chestPutBack",
+		name = "Put back what's out of order",
+		description = "With an ordered withdrawal, ask to put back anything you carry that belongs to a later step, so it can come out in its place",
+		section = chestSection,
+		position = 4
+	)
+	default boolean chestPutBack()
+	{
+		return true;
+	}
+
+	@ConfigItem(
+		keyName = KEY_SEPARATE_SOLO_CHESTS,
+		name = "Separate chests for solo raids",
+		description = "Keep a second set of chest plans for solo raids, picked by the raid's party size (the Team | Solo switch outside a raid). Starts as a copy of the team plans",
+		section = chestSection,
+		position = 5
+	)
+	default boolean separateSoloChests()
+	{
+		return false;
+	}
+
+	@Alpha
+	@ConfigItem(
+		keyName = "chestGlowColor",
+		name = "Glow colour",
+		description = "Outline colour, and the colour of the next click's orb",
+		section = chestSection,
+		position = 6
+	)
+	default Color chestGlowColor()
+	{
+		return new Color(0, 255, 220, 220);
+	}
+
+	@Alpha
+	@ConfigItem(
+		keyName = "chestGlowLastColor",
+		name = "End colour",
+		description = "Colour of the last orb of an ordered withdrawal: the fourth with the next four lit, the last click with all of them",
+		section = chestSection,
+		position = 7
+	)
+	default Color chestGlowLastColor()
+	{
+		return new Color(255, 80, 200, 220);
+	}
+
+	@Alpha
+	@ConfigItem(
+		keyName = "chestWearColor",
+		name = "Wear colour",
+		description = "Outline of gear still to put on, in the storage and the inventory",
+		section = chestSection,
+		position = 8
+	)
+	default Color chestWearColor()
+	{
+		return new Color(190, 90, 255, 230);
+	}
+
+	@ConfigItem(
+		keyName = "chestGlowPulse",
+		name = "Pulse",
+		description = "Make the outline breathe",
+		section = chestSection,
+		position = 9
+	)
+	default boolean chestGlowPulse()
+	{
+		return true;
+	}
+
+	@ConfigItem(
+		keyName = "hideOutsideRaid",
+		name = "Hide outside of the raid",
+		description = "Only show the sidebar icon while you're in the Chambers of Xeric",
+		section = sidebarSection,
+		position = 0
+	)
+	default boolean hideOutsideRaid()
+	{
+		return true;
+	}
+
+	@ConfigItem(
+		keyName = "hideSidebar",
+		name = "Always hide the sidebar icon",
+		description = "Never show the sidebar icon. The glow and the marks keep working from the plans you already made",
+		section = sidebarSection,
+		position = 1
+	)
+	default boolean hideSidebar()
+	{
+		return false;
+	}
+
+	@ConfigItem(
+		keyName = "suppliesTracker",
+		name = "Supplies tracker",
+		description = "Show the Supplies part of the sidebar: the doses you and your party hold against what you want for Olm. Its options are in the Supplies tracker section below",
+		section = sidebarSection,
+		position = 2
+	)
+	default boolean suppliesTracker()
+	{
+		return false;
+	}
 
 	@ConfigItem(
 		keyName = "needUnits",
@@ -58,23 +226,11 @@ public interface CoxStoragePlannerConfig extends Config
 	}
 
 	@ConfigItem(
-		keyName = "trackStamina",
-		name = "Stamina in solo raids",
-		description = "Show a Stamina row and count it as short for Olm in solo raids",
-		section = needSection,
-		position = 2
-	)
-	default boolean trackStamina()
-	{
-		return false;
-	}
-
-	@ConfigItem(
 		keyName = "countShared",
 		name = "Count shared storage",
 		description = "Count what's in shared storage towards the doses you need",
 		section = needSection,
-		position = 3
+		position = 2
 	)
 	default boolean countShared()
 	{
@@ -86,134 +242,11 @@ public interface CoxStoragePlannerConfig extends Config
 		name = "Count split overloads",
 		description = "Count a set of elder, twisted and kodai towards the overload doses you need",
 		section = needSection,
-		position = 4
+		position = 3
 	)
 	default boolean countSplit()
 	{
 		return true;
-	}
-
-	@ConfigItem(
-		keyName = "chestOverlay",
-		name = "Steps overlay",
-		description = "List the chest's steps on screen while its storage is open",
-		section = chestSection,
-		position = 0
-	)
-	default boolean chestOverlay()
-	{
-		return false;
-	}
-
-	@ConfigItem(
-		keyName = "chestGlow",
-		name = "Glow items",
-		description = "Outline the items still to move in the storage and the inventory",
-		section = chestSection,
-		position = 1
-	)
-	default boolean chestGlow()
-	{
-		return true;
-	}
-
-	@ConfigItem(
-		keyName = "chestOrderedGlow",
-		name = "Ordered withdraw glow",
-		description = "With an ordered withdraw list: glow just the next item, the next four with the biggest orb on the next one, or all of them from the first colour to the last",
-		section = chestSection,
-		position = 2
-	)
-	default ChestGlow chestOrderedGlow()
-	{
-		return ChestGlow.NEXT_FOUR;
-	}
-
-	@ConfigItem(
-		keyName = "chestPutBack",
-		name = "Put back what's out of order",
-		description = "With an ordered withdraw list, ask to put back anything you carry that belongs to a later step, so it can come out in its place",
-		section = chestSection,
-		position = 3
-	)
-	default boolean chestPutBack()
-	{
-		return true;
-	}
-
-	@Alpha
-	@ConfigItem(
-		keyName = "chestGlowColor",
-		name = "Glow colour",
-		description = "Outline colour, and the first colour of the gradient",
-		section = chestSection,
-		position = 4
-	)
-	default Color chestGlowColor()
-	{
-		return new Color(0, 255, 220, 220);
-	}
-
-	@Alpha
-	@ConfigItem(
-		keyName = "chestGlowLastColor",
-		name = "Gradient end colour",
-		description = "Colour of the last item in an ordered list when all of them glow",
-		section = chestSection,
-		position = 5
-	)
-	default Color chestGlowLastColor()
-	{
-		return new Color(255, 80, 200, 220);
-	}
-
-	@Alpha
-	@ConfigItem(
-		keyName = "chestWearColor",
-		name = "Wear colour",
-		description = "Outline of gear still to put on, in the storage and the inventory",
-		section = chestSection,
-		position = 6
-	)
-	default Color chestWearColor()
-	{
-		return new Color(190, 90, 255, 230);
-	}
-
-	@ConfigItem(
-		keyName = "chestGlowPulse",
-		name = "Pulse",
-		description = "Make the outline breathe",
-		section = chestSection,
-		position = 7
-	)
-	default boolean chestGlowPulse()
-	{
-		return true;
-	}
-
-	@ConfigItem(
-		keyName = "chestMarkers",
-		name = "Mark the storage unit",
-		description = "A ? over the storage unit in your room while its chest has things to do, a green tick once it's all done",
-		section = chestSection,
-		position = 9
-	)
-	default boolean chestMarkers()
-	{
-		return true;
-	}
-
-	@ConfigItem(
-		keyName = KEY_SEPARATE_SOLO_CHESTS,
-		name = "Separate chests for solo raids",
-		description = "Keep a second set of chest plans for solo raids, picked by the raid's party size (the Team | Solo switch outside a raid). Starts as a copy of the team plans",
-		section = chestSection,
-		position = 8
-	)
-	default boolean separateSoloChests()
-	{
-		return false;
 	}
 
 	@ConfigItem(
@@ -234,6 +267,17 @@ public interface CoxStoragePlannerConfig extends Config
 		hidden = true
 	)
 	default String chestsSolo()
+	{
+		return "";
+	}
+
+	@ConfigItem(
+		keyName = KEY_ICONS,
+		name = "List icons",
+		description = "Item ids the plugin has seen for the lines of the chest lists, for the icons in the sidebar",
+		hidden = true
+	)
+	default String lineIcons()
 	{
 		return "";
 	}

@@ -113,7 +113,7 @@ public class ChestPlanTest
 		assertNull(maulIn.highlightsWithdraw("Overload(4)", 1));
 		assertNull(maulIn.highlightsWithdraw("Overload(4)", 2));
 		assertEquals(3, maulIn.highlightsWithdraw("Overload(4)", 3).order);
-		assertEquals(2, maulIn.rank(maulIn.highlightsWithdraw("Overload(4)", 3)));
+		assertEquals(2, maulIn.highlightsWithdraw("Overload(4)", 3).rank);
 
 		ChestProgress after = new ChestProgress(plan,
 			ChestProgress.tally(Arrays.asList("Xeric's aid(4)", "Xeric's aid(4)", "Stinkhorn mushroom", "Overload(4)")));
@@ -236,9 +236,94 @@ public class ChestPlanTest
 		assertEquals(7, progress.deposits.get(0).remaining);
 		assertEquals(Integer.MAX_VALUE, progress.deposits.get(1).remaining);
 		assertEquals(2, progress.withdrawals.get(0).remaining);
-		assertEquals(3, progress.withdrawals.get(1).remaining);
+		// the same item further down only counts its own
+		assertEquals(1, progress.withdrawals.get(1).remaining);
 		assertEquals(0, new ChestProgress(plan, carried, ChestProgress.tally(Arrays.asList("Scythe of vitur")), carried, storage)
 			.wears.get(0).remaining);
+	}
+
+	@Test
+	public void everyClickHasItsNumber()
+	{
+		ChestPlan plan = new ChestPlan("RAIDS_END#2", "Pre-Olm");
+		plan.getWithdraw().addAll(Arrays.asList("Ayak", "Overload", "Stinkhorn mushroom, 3", "Xeric's aid, 2", "Xeric's aid", "Noxifer"));
+		plan.setOrdered(true);
+		Map<String, Integer> none = Collections.emptyMap();
+		Map<String, Integer> storage = new java.util.LinkedHashMap<>(ChestProgress.tally(Arrays.asList("Overload (+)(4)",
+			"Xeric's aid(4)", "Xeric's aid(4)", "Xeric's aid(4)", "Xeric's aid(4)", "Xeric's aid(4)", "Noxifer")));
+		storage.put("Stinkhorn mushroom", 8);
+		java.util.Set<String> stacks = Collections.singleton("Stinkhorn mushroom");
+		ChestProgress progress = new ChestProgress(plan, none, none, none, storage, false, stacks);
+		// the ayak isn't anywhere, so it takes no number and the overload is click 1
+		assertTrue(progress.withdrawals.get(0).missing);
+		assertEquals(1, progress.withdrawals.get(1).click);
+		assertEquals(0, progress.withdrawals.get(1).rank);
+		// a stack is one click whatever the count
+		assertTrue(progress.withdrawals.get(2).stack);
+		assertEquals(2, progress.withdrawals.get(2).click);
+		// two aids are clicks 3 and 4, the third aid further down is 5
+		assertEquals(3, progress.withdrawals.get(3).click);
+		assertEquals(2, progress.withdrawals.get(3).rank);
+		assertEquals(5, progress.withdrawals.get(4).click);
+		assertEquals(6, progress.withdrawals.get(5).click);
+		assertEquals(6, progress.clicks);
+		assertEquals(Arrays.asList(progress.withdrawals.get(3), progress.withdrawals.get(4)),
+			progress.withdrawSteps("Xeric's aid(4)", Integer.MAX_VALUE));
+		// only steps within the next four clicks: the aid on the second line is the fifth
+		assertEquals(Arrays.asList(progress.withdrawals.get(3)), progress.withdrawSteps("Xeric's aid(4)", 4));
+		assertTrue(progress.wantsNext("Overload (+)(4)"));
+		assertFalse(progress.wantsNext("Xeric's aid(4)"));
+
+		// overload, mushrooms and one aid out: the numbers stay put, the aid left to take is still click 4
+		Map<String, Integer> carried = new java.util.LinkedHashMap<>(ChestProgress.tally(Arrays.asList("Overload (+)(4)", "Xeric's aid(4)")));
+		carried.put("Stinkhorn mushroom", 3);
+		storage = new java.util.LinkedHashMap<>(ChestProgress.tally(Arrays.asList(
+			"Xeric's aid(4)", "Xeric's aid(4)", "Xeric's aid(4)", "Xeric's aid(4)", "Noxifer")));
+		storage.put("Stinkhorn mushroom", 5);
+		progress = new ChestProgress(plan, carried, none, none, storage, false, stacks);
+		assertTrue(progress.withdrawals.get(2).done);
+		assertEquals(4, progress.withdrawals.get(3).click);
+		assertEquals(0, progress.withdrawals.get(3).rank);
+		assertEquals(1, progress.withdrawals.get(3).remaining);
+		assertEquals(5, progress.withdrawals.get(4).click);
+		assertEquals(1, progress.withdrawals.get(4).rank);
+		assertEquals(6, progress.clicks);
+	}
+
+	@Test
+	public void twoOfFiveLightAsTwoClicks()
+	{
+		ChestPlan plan = new ChestPlan("RAIDS_END#2", "Pre-Olm");
+		plan.getWithdraw().addAll(Arrays.asList("Overload", "Xeric's aid, 2", "Noxifer", "Xeric's aid, 2"));
+		plan.setOrdered(true);
+		Map<String, Integer> none = Collections.emptyMap();
+		Map<String, Integer> storage = ChestProgress.tally(Arrays.asList("Overload (+)(4)", "Noxifer",
+			"Xeric's aid(4)", "Xeric's aid(4)", "Xeric's aid(4)", "Xeric's aid(4)", "Xeric's aid(4)"));
+		ChestProgress progress = new ChestProgress(plan, none, none, none, storage);
+
+		// five aids in the storage, one frame: 2 and 3, then (past the noxifer) 5 and 6, the fifth dark
+		ChestItemOverlay overlay = new ChestItemOverlay(null, null, null);
+		int[] numbers = new int[5];
+		for (int i = 0; i < 5; i++)
+		{
+			ChestItemOverlay.Click click = overlay.withdrawal(progress, "Xeric's aid(4)", 1, Integer.MAX_VALUE);
+			numbers[i] = click == null ? 0 : click.number;
+		}
+		assertEquals("[2, 3, 5, 6, 0]", Arrays.toString(numbers));
+		assertEquals(1, overlay.withdrawal(progress, "Overload (+)(4)", 1, Integer.MAX_VALUE).number);
+		assertEquals(4, overlay.withdrawal(progress, "Noxifer", 1, Integer.MAX_VALUE).number);
+
+		// with the next four clicks lit, the fifth and sixth wait
+		overlay = new ChestItemOverlay(null, null, null);
+		for (int i = 0; i < 5; i++)
+		{
+			ChestItemOverlay.Click click = overlay.withdrawal(progress, "Xeric's aid(4)", 1, 4);
+			numbers[i] = click == null ? 0 : click.number;
+		}
+		assertEquals("[2, 3, 0, 0, 0]", Arrays.toString(numbers));
+		ChestItemOverlay.Click last = overlay.withdrawal(progress, "Noxifer", 1, 4);
+		assertEquals(4, last.number);
+		assertEquals(3, last.rank);
 	}
 
 	@Test

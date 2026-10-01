@@ -19,9 +19,10 @@ import net.runelite.client.ui.overlay.WidgetItemOverlay;
 
 /**
  * Outlines the items a chest plan still wants moved: in the side inventory what goes in,
- * in the storage what comes out, and gear to put on in its own colour before either. The next one
- * of an ordered plan pulses; with the next four lit, each carries a numbered orb that shrinks the
- * further down the order it is. A step that wants more than one shows "x5" in the slot's top right corner.
+ * in the storage what comes out, and gear to put on in its own colour before either. With an ordered
+ * plan every click has its own number, so "Xeric's aid, 2" lights two of them as 17 and 18; the next
+ * click pulses, and with the next four lit the orbs shrink and shift colour the further off they are.
+ * A stack that wants more than one out shows "x5" in the slot's top right corner.
  */
 class ChestItemOverlay extends WidgetItemOverlay
 {
@@ -40,8 +41,8 @@ class ChestItemOverlay extends WidgetItemOverlay
 
 	/** Orb diameters for the next withdrawal and the three after it. The next one covers the item. */
 	private static final int[] ORB_SIZES = {28, 16, 12, 10};
-	/** How much the colour fades for each of those. */
-	private static final float[] ORB_FADE = {1f, 0.65f, 0.5f, 0.4f};
+	/** How much the colour fades for each of those, on top of its shift towards the end colour. */
+	private static final float[] ORB_FADE = {1f, 0.9f, 0.8f, 0.7f};
 
 	/** How much of each step has lit up so far this frame, so "Xeric's aid, 2" lights two and not the whole row. */
 	private final Map<ChestProgress.Step, Integer> lit = new IdentityHashMap<>();
@@ -63,6 +64,44 @@ class ChestItemOverlay extends WidgetItemOverlay
 		}
 		lit.put(step, already + Math.max(1, widgetItem.getQuantity()));
 		return false;
+	}
+
+	/** A storage item's place in the withdrawal: its step, its click's number in the plan, and how many clicks come first. */
+	static final class Click
+	{
+		final ChestProgress.Step step;
+		final int number;
+		final int rank;
+
+		private Click(ChestProgress.Step step, int number, int rank)
+		{
+			this.step = step;
+			this.number = number;
+			this.rank = rank;
+		}
+	}
+
+	/**
+	 * The withdrawal a storage item lights up for this frame, null for none. Each item takes the next
+	 * click of the first step that still wants one, so "Xeric's aid, 2" lights two aids as two clicks
+	 * and leaves the rest of the row dark. With an ordered plan only the next {@code limit} clicks light.
+	 */
+	Click withdrawal(ChestProgress progress, String name, int quantity, int limit)
+	{
+		boolean ordered = progress.plan.isOrdered();
+		for (ChestProgress.Step step : progress.withdrawSteps(name, limit))
+		{
+			int already = lit.getOrDefault(step, 0);
+			// a stack is one click however many come out of it
+			int ahead = step.stack ? 0 : already;
+			if (already >= step.remaining || (ordered && step.rank + ahead >= limit))
+			{
+				continue;
+			}
+			lit.put(step, already + Math.max(1, quantity));
+			return new Click(step, step.click + ahead, step.rank + ahead);
+		}
+		return null;
 	}
 
 	/** Whether this is the first item lit for the step, which is the one that carries its "xN". */
@@ -115,30 +154,32 @@ class ChestItemOverlay extends WidgetItemOverlay
 		else
 		{
 			ChestGlow mode = config.chestOrderedGlow();
-			step = progress.highlightsWithdraw(name, mode.getSteps());
-			if (step == null || enough(step, widgetItem))
+			boolean ordered = progress.plan.isOrdered();
+			Click click = withdrawal(progress, name, widgetItem.getQuantity(), mode.getSteps());
+			if (click == null)
 			{
 				return;
 			}
-			int rank = progress.rank(step);
-			pulse = !progress.plan.isOrdered() || rank == 0;
+			step = click.step;
+			int rank = click.rank;
+			pulse = !ordered || rank == 0;
 			color = config.chestGlowColor();
-			if (progress.plan.isOrdered())
+			if (ordered)
 			{
-				order = step.order;
+				order = click.number;
+				int near = Math.min(rank, ORB_SIZES.length - 1);
 				switch (mode)
 				{
 					case NEXT_FOUR:
-						// the next one is big and bright, the ones behind it smaller and fainter
-						orb = ORB_SIZES[Math.min(rank, ORB_SIZES.length - 1)];
-						color = fade(color, ORB_FADE[Math.min(rank, ORB_FADE.length - 1)]);
+						// the next click is big and in the first colour, the ones behind it smaller and nearer the last
+						orb = ORB_SIZES[near];
+						color = fade(blend(color, config.chestGlowLastColor(), near / (float) (ORB_SIZES.length - 1)), ORB_FADE[near]);
 						break;
 					case GRADIENT:
 						orb = ORB_SIZES[1];
-						if (progress.withdrawals.size() > 1)
+						if (progress.clicks > 1)
 						{
-							color = blend(config.chestGlowColor(), config.chestGlowLastColor(),
-								(step.order - 1) / (float) (progress.withdrawals.size() - 1));
+							color = blend(color, config.chestGlowLastColor(), (order - 1) / (float) (progress.clicks - 1));
 						}
 						break;
 					default:
@@ -159,7 +200,9 @@ class ChestItemOverlay extends WidgetItemOverlay
 		{
 			drawOrb(graphics, bounds, orb, color, order);
 		}
-		if (step != null && step.remaining > 1 && step.remaining != Integer.MAX_VALUE && firstLit(step, widgetItem))
+		// numbered clicks already say how many; a stack, a deposit or gear says it here
+		if (step != null && step.remaining > 1 && step.remaining != Integer.MAX_VALUE && firstLit(step, widgetItem)
+			&& (order == 0 || step.stack))
 		{
 			drawCount(graphics, bounds, step.remaining, color);
 		}

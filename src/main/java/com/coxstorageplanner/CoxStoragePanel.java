@@ -8,7 +8,6 @@ import java.awt.Dimension;
 import java.awt.FlowLayout;
 import java.awt.GridBagConstraints;
 import java.awt.GridBagLayout;
-import java.awt.GridLayout;
 import java.awt.Insets;
 import java.awt.event.FocusAdapter;
 import java.awt.event.FocusEvent;
@@ -21,7 +20,6 @@ import java.util.List;
 import java.util.Map;
 import javax.swing.JCheckBox;
 import javax.swing.JComboBox;
-import javax.swing.JComponent;
 import javax.swing.JLabel;
 import javax.swing.JPanel;
 import javax.swing.JTextArea;
@@ -43,8 +41,6 @@ class CoxStoragePanel extends PluginPanel
 		/** Switches the doses needed between the team and the solo numbers. */
 		void setNeedsTab(boolean solo);
 
-		void renameChest(String key, String name);
-
 		void setChestOrdered(String key, boolean ordered);
 
 		/** Replaces a chest's deposit (true) or withdraw (false) list with the lines of the text. */
@@ -60,14 +56,12 @@ class CoxStoragePanel extends PluginPanel
 
 		/** Replaces a chest's Take out with what's worn and carried right now, in order, and orders it. */
 		void copyLoadout(String key);
-
-		/** Replaces a chest's plan with the same chest's plan from the other set (team or solo). */
-		void copyChestFromOther(String key);
 	}
 
 	interface Icons
 	{
-		void set(JLabel label, int itemId);
+		/** @param quantity drawn on the icon like a stack's number when more than 1 */
+		void set(JLabel label, int itemId, int quantity);
 	}
 
 	private static final Color GOOD = new Color(110, 200, 110);
@@ -77,6 +71,8 @@ class CoxStoragePanel extends PluginPanel
 	private static final Color WEAR = new Color(200, 130, 255);
 
 	private static final int MAX_NAME = 12;
+	/** Icons per row of the In / Out strip before it ends in "...". */
+	private static final int MAX_ICONS = 4;
 
 	/** A column of rows that each take the full width. */
 	private static final class Stack extends JPanel
@@ -122,24 +118,25 @@ class CoxStoragePanel extends PluginPanel
 	private final Map<Potion, JLabel> detailLabels = new EnumMap<>(Potion.class);
 	private final Map<Potion, JLabel> moreLabels = new EnumMap<>(Potion.class);
 	private final Map<Potion, JTextField> needFields = new EnumMap<>(Potion.class);
-	private final Map<Potion, JComponent> supplyRows = new EnumMap<>(Potion.class);
 	private final JLabel teamTab = small("Team", Color.WHITE);
 	private final JLabel soloTab = small("Solo", MUTED);
 	private NeedUnits units = NeedUnits.POTIONS;
 	private final JPanel storageGrid = new JPanel(new GridBagLayout());
 	private final Stack chestsBody = new Stack(ColorScheme.DARKER_GRAY_COLOR);
 	private final JComboBox<String> chestChooser = new JComboBox<>();
-	private final JTextField chestName = new JTextField();
-	private final JCheckBox chestOrdered = new JCheckBox("Withdraw in this order");
+	private final JCheckBox chestOrdered = new JCheckBox("Ordered withdrawal");
 	private final JTextArea chestDeposit = new JTextArea(2, 10);
 	private final JTextArea chestWithdraw = new JTextArea(3, 10);
+	/** What goes in and what comes out, as icons. */
+	private final Stack chestFlow = new Stack(null);
+	/** What the strip was last built from, so it's only rebuilt when that changes. */
+	private String chestFlowShown;
 	private final Stack chestSteps = new Stack(null);
 	private String selectedChest;
 	private final JLabel chestHere = small("", MUTED);
-	/** Which set of chests is shown when solo raids have their own, with a chip to copy the other set's plan. */
-	private final JPanel chestSet = new JPanel(new BorderLayout());
-	private final JLabel chestSetLabel = small("", MUTED);
-	private JLabel chestSetCopy;
+	private JPanel tabs;
+	private JPanel suppliesHeader;
+	private JPanel suppliesBody;
 	private final JCheckBox chestMark = new JCheckBox("Mark by clicking");
 	private final JPanel chestEditor = new JPanel(new BorderLayout());
 	private final List<String> chestKeys = new ArrayList<>();
@@ -158,17 +155,13 @@ class CoxStoragePanel extends PluginPanel
 		setBackground(ColorScheme.DARK_GRAY_COLOR);
 
 		Stack content = new Stack(null);
-		content.addRow(header("Chests", chip("Delete", ColorScheme.DARKER_GRAY_COLOR,
-			"Forget the chest shown below", () ->
-			{
-				if (selectedChest != null)
-				{
-					actions.deleteChest(selectedChest);
-				}
-			})), 0);
+		tabs = needsTabs();
+		content.addRow(header("Chests", tabs), 0);
 		content.addRow(buildChests(), 4);
-		content.addRow(header("Supplies", needsTabs()), 12);
-		content.addRow(buildSupplies(), 4);
+		suppliesHeader = header("Supplies", null);
+		suppliesBody = buildSupplies();
+		content.addRow(suppliesHeader, 12);
+		content.addRow(suppliesBody, 4);
 		add(content, BorderLayout.NORTH);
 
 		update(new PanelState());
@@ -193,6 +186,15 @@ class CoxStoragePanel extends PluginPanel
 	{
 		JLabel label = new JLabel(text);
 		label.setFont(FontManager.getRunescapeSmallFont());
+		label.setForeground(color);
+		return label;
+	}
+
+	/** The panel's main text, a size up from {@link #small}. */
+	private static JLabel text(String text, Color color)
+	{
+		JLabel label = new JLabel(text);
+		label.setFont(FontManager.getRunescapeFont());
 		label.setForeground(color);
 		return label;
 	}
@@ -238,27 +240,27 @@ class CoxStoragePanel extends PluginPanel
 
 			JLabel icon = new JLabel();
 			icon.setPreferredSize(new Dimension(36, 32));
-			icons.set(icon, potion.getIconItemId());
+			icons.set(icon, potion.getIconItemId(), 1);
 			icon.setToolTipText(potion.getDisplayName());
 
 			JLabel have = new JLabel();
-			have.setFont(FontManager.getRunescapeSmallFont());
+			have.setFont(FontManager.getRunescapeFont());
 			JLabel detail = small("", MUTED);
 			JLabel more = small("", MUTED);
 			haveLabels.put(potion, have);
 			detailLabels.put(potion, detail);
 			moreLabels.put(potion, more);
 
-			JPanel text = new JPanel(new GridLayout(4, 1));
-			text.setOpaque(false);
-			JLabel name = small(potion.getDisplayName(), Color.WHITE);
-			text.add(name);
-			text.add(have);
-			text.add(detail);
-			text.add(more);
+			// a stack, so the shared line takes no room while it's hidden
+			Stack lines = new Stack(null);
+			JLabel name = text(potion.getDisplayName(), Color.WHITE);
+			lines.addRow(narrow(name), 0);
+			lines.addRow(narrow(have), 1);
+			lines.addRow(narrow(detail), 1);
+			lines.addRow(narrow(more), 1);
 
 			JTextField need = new JTextField("0");
-			need.setFont(FontManager.getRunescapeSmallFont());
+			need.setFont(FontManager.getRunescapeFont());
 			need.setHorizontalAlignment(SwingConstants.CENTER);
 			need.setMargin(new Insets(1, 1, 1, 1));
 			need.setToolTipText(potion.getDisplayName() + " you want to have when you get to Olm");
@@ -273,18 +275,21 @@ class CoxStoragePanel extends PluginPanel
 				}
 			});
 			needFields.put(potion, need);
+			JPanel needBox = new JPanel(new BorderLayout());
+			needBox.setOpaque(false);
+			needBox.setPreferredSize(new Dimension(38, 36));
+			needBox.add(small("need", MUTED), BorderLayout.NORTH);
+			needBox.add(need, BorderLayout.CENTER);
+			// held at the top, so a taller row doesn't stretch the field
 			JPanel needHolder = new JPanel(new BorderLayout());
 			needHolder.setOpaque(false);
-			needHolder.setPreferredSize(new Dimension(36, 36));
-			needHolder.add(small("need", MUTED), BorderLayout.NORTH);
-			needHolder.add(need, BorderLayout.CENTER);
+			needHolder.add(needBox, BorderLayout.NORTH);
 
 			JPanel row = new JPanel(new BorderLayout(6, 0));
 			row.setOpaque(false);
 			row.add(icon, BorderLayout.WEST);
-			row.add(text, BorderLayout.CENTER);
+			row.add(lines, BorderLayout.CENTER);
 			row.add(needHolder, BorderLayout.EAST);
-			supplyRows.put(potion, row);
 			body.addRow(row, first ? 0 : 6);
 			first = false;
 		}
@@ -301,7 +306,7 @@ class CoxStoragePanel extends PluginPanel
 		List<Potion> potions = new ArrayList<>();
 		for (Potion potion : Potion.values())
 		{
-			if (potion.isSupply() && !potion.isSoloOnly())
+			if (potion.isSupply())
 			{
 				potions.add(potion);
 			}
@@ -328,7 +333,7 @@ class CoxStoragePanel extends PluginPanel
 			c.gridy++;
 			Supplies held = member.status == null ? null : member.status.getHeld();
 			boolean storageUnknown = member.status != null && member.status.getStored() == null;
-			String note = held == null ? "Nothing known: ask them to install CoX Storage Planner from the Plugin Hub"
+			String note = held == null ? "Nothing known: they need CoX Storage Planner with its Supplies tracker on"
 				: storageUnknown ? "Inventory only, " + (member.self ? "your" : "their")
 				+ " private storage hasn't been opened this raid" : null;
 			gridRow(c, member.self ? "You" : member.name, held == null ? MUTED : member.self ? GOOD : Color.WHITE, potions,
@@ -379,40 +384,15 @@ class CoxStoragePanel extends PluginPanel
 		}
 	}
 
-	/** A chooser for the chest, its name, and the two lists with what the inventory says about them. */
+	/** A chooser for the chest and its two lists, then what they come to as icons and how far along the inventory is. */
 	private JPanel buildChests()
 	{
 		chestsBody.setBorder(new EmptyBorder(6, 6, 6, 6));
+		chestHere.setFont(FontManager.getRunescapeFont());
 		chestsBody.addRow(chestHere, 0);
-		chestSetCopy = chip("Copy from Team", ColorScheme.DARKER_GRAY_COLOR,
-			"Replace this chest's lists with the same chest's from the other set", () ->
-			{
-				if (selectedChest != null)
-				{
-					actions.copyChestFromOther(selectedChest);
-				}
-			});
-		chestSet.setOpaque(false);
-		chestSet.add(chestSetLabel, BorderLayout.WEST);
-		chestSet.add(chestSetCopy, BorderLayout.EAST);
-		chestSet.setVisible(false);
-		chestsBody.addRow(chestSet, 4);
-		chestMark.setOpaque(false);
-		chestMark.setFont(FontManager.getRunescapeSmallFont());
-		chestMark.setForeground(Color.WHITE);
-		chestMark.setToolTipText("<html>While on, left-clicking an item in a storage adds it to Take out and one in your inventory to Put in."
-			+ "<br>Each click adds one more; Unmark on the right-click menu takes one away. Off again when you leave the raid.</html>");
-		chestMark.addActionListener(e ->
-		{
-			if (!updating)
-			{
-				actions.setMarking(chestMark.isSelected());
-			}
-		});
-		chestsBody.addRow(chestMark, 2);
 
-		chestChooser.setFont(FontManager.getRunescapeSmallFont());
-		chestChooser.setPreferredSize(new Dimension(100, 24));
+		chestChooser.setFont(FontManager.getRunescapeFont());
+		chestChooser.setPreferredSize(new Dimension(100, 26));
 		chestChooser.addActionListener(e ->
 		{
 			int index = chestChooser.getSelectedIndex();
@@ -423,15 +403,28 @@ class CoxStoragePanel extends PluginPanel
 				showChest(lastState);
 			}
 		});
+		JPanel chooser = new JPanel(new BorderLayout(4, 0));
+		chooser.setOpaque(false);
+		chooser.add(chestChooser, BorderLayout.CENTER);
+		chooser.add(chip("Delete", ColorScheme.DARK_GRAY_COLOR, "Forget this chest and its lists", () ->
+		{
+			if (selectedChest != null)
+			{
+				actions.deleteChest(selectedChest);
+			}
+		}), BorderLayout.EAST);
 
-		chestName.setFont(FontManager.getRunescapeSmallFont());
-		chestName.setToolTipText("Your name for this chest");
-		commitOn(chestName, () -> actions.renameChest(selectedChest, chestName.getText()));
+		check(chestMark, "<html>While on, left-clicking an item in a storage adds it to Take out and one in your inventory to Put in."
+			+ "<br>Each click adds one more; Unmark on the right-click menu takes one away. Off again when you leave the raid.</html>");
+		chestMark.addActionListener(e ->
+		{
+			if (!updating)
+			{
+				actions.setMarking(chestMark.isSelected());
+			}
+		});
 
-		chestOrdered.setOpaque(false);
-		chestOrdered.setFont(FontManager.getRunescapeSmallFont());
-		chestOrdered.setForeground(Color.WHITE);
-		chestOrdered.setToolTipText("Take things out top to bottom; the next one is lit up in the storage");
+		check(chestOrdered, "Take things out top to bottom; every click gets its number in the storage and the next one is lit up");
 		chestOrdered.addActionListener(e ->
 		{
 			if (!updating && selectedChest != null)
@@ -441,40 +434,50 @@ class CoxStoragePanel extends PluginPanel
 		});
 
 		Stack editor = new Stack(null);
-		editor.addRow(chestChooser, 0);
-		editor.addRow(chestName, 4);
-		editor.addRow(chestOrdered, 4);
-		editor.addRow(small("Put in", Color.WHITE), 6);
-		editor.addRow(listArea(chestDeposit, true), 2);
+		editor.addRow(chooser, 0);
+		editor.addRow(chestMark, 8);
+		editor.addRow(text("Put in", ColorScheme.BRAND_ORANGE), 2);
+		editor.addRow(listArea(chestDeposit, true), 3);
+		editor.addRow(chestOrdered, 8);
 		JPanel takeOut = new JPanel(new BorderLayout());
 		takeOut.setOpaque(false);
-		takeOut.add(small("Take out", Color.WHITE), BorderLayout.WEST);
-		takeOut.add(chip("Copy my loadout", ColorScheme.DARKER_GRAY_COLOR,
+		takeOut.add(text("Take out", ColorScheme.BRAND_ORANGE), BorderLayout.WEST);
+		takeOut.add(chip("Copy my loadout", ColorScheme.DARK_GRAY_COLOR,
 			"<html>Replace Take out with what you're wearing and carrying right now, in order,<br>"
-				+ "and tick Withdraw in this order. Withdrawing it that way rebuilds the same inventory.</html>", () ->
+				+ "and tick Ordered withdrawal. Withdrawing it that way rebuilds the same inventory.</html>", () ->
 			{
 				if (selectedChest != null)
 				{
 					actions.copyLoadout(selectedChest);
 				}
 			}), BorderLayout.EAST);
-		editor.addRow(takeOut, 6);
-		editor.addRow(listArea(chestWithdraw, false), 2);
+		editor.addRow(takeOut, 2);
+		editor.addRow(listArea(chestWithdraw, false), 3);
+		editor.addRow(chestFlow, 8);
 		editor.addRow(chestSteps, 6);
 		chestEditor.setOpaque(false);
 		chestEditor.add(editor, BorderLayout.CENTER);
-		chestsBody.addRow(chestEditor, 4);
+		chestsBody.addRow(chestEditor, 6);
 		return chestsBody;
+	}
+
+	private static void check(JCheckBox box, String tooltip)
+	{
+		box.setOpaque(false);
+		box.setFont(FontManager.getRunescapeFont());
+		box.setForeground(Color.WHITE);
+		box.setBorder(new EmptyBorder(0, 0, 0, 0));
+		box.setToolTipText(tooltip);
 	}
 
 	private JTextArea listArea(JTextArea area, boolean deposit)
 	{
-		area.setFont(FontManager.getRunescapeSmallFont());
+		area.setFont(FontManager.getRunescapeFont());
 		area.setLineWrap(true);
 		area.setWrapStyleWord(true);
-		area.setMargin(new Insets(3, 3, 3, 3));
+		area.setMargin(new Insets(4, 4, 4, 4));
 		area.setToolTipText("<html>One item per line, matched from the start of its name, so 'Xeric's aid' is any dose."
-			+ "<br>* and ? are wildcards: '*chinchompa', 'Dragon *'. 'Stinkhorn mushroom, 3' for a number"
+			+ "<br>* and ? are wildcards: '*chinchompa', 'Dragon *'. 'Stinkhorn mushroom, 3' for a number, 'Ayak | Sang* staff*' for either"
 			+ (deposit ? ", 'everything' to empty the inventory, 'everything else' to put away what Take out doesn't keep"
 			: ", 'wear Scythe of vitur' for gear to put on first") + ".</html>");
 		// saved as you type, so the lists count even if the game canvas never takes the focus back
@@ -507,19 +510,6 @@ class CoxStoragePanel extends PluginPanel
 			}
 		});
 		return area;
-	}
-
-	private static void commitOn(JTextField field, Runnable commit)
-	{
-		field.addActionListener(e -> commit.run());
-		field.addFocusListener(new FocusAdapter()
-		{
-			@Override
-			public void focusLost(FocusEvent e)
-			{
-				commit.run();
-			}
-		});
 	}
 
 	private void updateChests(PanelState state)
@@ -557,19 +547,13 @@ class CoxStoragePanel extends PluginPanel
 		}
 		else if (state.currentChest == null)
 		{
-			chestHere.setText("Not at a chest");
+			chestHere.setText(state.inRaid ? "Not at a storage unit" : "Not in a raid");
 		}
 		else
 		{
 			ChestPlan here = state.chests.get(state.currentChest);
-			chestHere.setText("At: " + (here == null ? CoxStoragePlannerPlugin.chestName(state.currentChest)
+			chestHere.setText("You're at " + (here == null ? CoxStoragePlannerPlugin.chestName(state.currentChest)
 				: here.getName()));
-		}
-		chestSet.setVisible(state.separateSoloChests);
-		if (state.separateSoloChests)
-		{
-			chestSetLabel.setText(state.solo ? "Solo raid chests" : "Team raid chests");
-			chestSetCopy.setText(state.solo ? "Copy from Team" : "Copy from Solo");
 		}
 		showChest(state);
 	}
@@ -586,10 +570,10 @@ class CoxStoragePanel extends PluginPanel
 		{
 			chestChooser.setSelectedIndex(index);
 		}
-		setIfIdle(chestName, plan.getName());
 		chestOrdered.setSelected(plan.isOrdered());
 		setIfIdle(chestDeposit, String.join("\n", plan.getDeposit()));
 		setIfIdle(chestWithdraw, String.join("\n", plan.getWithdraw()));
+		showFlow(plan, state);
 
 		chestSteps.clear();
 		if (plan.getKey().equals(state.currentChest))
@@ -600,24 +584,118 @@ class CoxStoragePanel extends PluginPanel
 			ChestProgress.Step next = progress.next();
 			for (ChestProgress.Step step : progress.wears)
 			{
-				chestSteps.addRow(small((step.done ? "✓ " : "• ") + "wear: " + step.line.name, step.done ? GOOD : WEAR), 0);
+				chestSteps.addRow(stepRow((step.done ? "✓ " : "• ") + "wear: " + step.line.name, step.done ? GOOD : WEAR), 0);
 			}
 			for (ChestProgress.Step step : progress.deposits)
 			{
-				chestSteps.addRow(small((step.done ? "✓ " : "• ") + "in: " + step.line.text, step.done ? GOOD : Color.WHITE), 0);
+				chestSteps.addRow(stepRow((step.done ? "✓ " : "• ") + "in: " + step.line.text, step.done ? GOOD : Color.WHITE), 0);
 			}
 			for (String name : progress.outOfOrder)
 			{
-				chestSteps.addRow(small("• back in: " + name + " (comes later)", WARN), 0);
+				chestSteps.addRow(stepRow("• back in: " + name + " (comes later)", WARN), 0);
 			}
 			for (ChestProgress.Step step : progress.withdrawals)
 			{
 				String prefix = step.missing ? "– " : step.done ? "✓ " : step == next ? "→ " : "• ";
-				chestSteps.addRow(small(prefix + (plan.isOrdered() ? step.order + ". " : "out: ") + step.line.text
+				chestSteps.addRow(stepRow(prefix + (plan.isOrdered() ? step.order + ". " : "out: ") + step.line.text
 					+ (step.missing ? " (not here)" : ""),
 					step.missing ? MUTED : step.done ? GOOD : step == next ? WARN : Color.WHITE), 0);
 			}
 		}
+	}
+
+	/** A line of the steps list; one too long for the sidebar ends in "..." and has the rest in its tooltip. */
+	private static JLabel stepRow(String text, Color color)
+	{
+		JLabel label = small(text, color);
+		label.setToolTipText(text);
+		return narrow(label);
+	}
+
+	/** Lets a label in a full-width row end in "..." rather than push the sidebar wider than it is. */
+	private static JLabel narrow(JLabel label)
+	{
+		String text = label.getText();
+		label.setText("Xg");
+		label.setPreferredSize(new Dimension(60, label.getPreferredSize().height));
+		label.setText(text);
+		return label;
+	}
+
+	/** The chest's two lists as rows of item icons, "..." after the fourth. */
+	private void showFlow(ChestPlan plan, PanelState state)
+	{
+		List<ChestPlan.Line> in = ChestPlan.parse(plan.getDeposit());
+		List<ChestPlan.Line> out = ChestPlan.parse(plan.getWithdraw());
+		StringBuilder shown = new StringBuilder(plan.getKey());
+		for (List<ChestPlan.Line> lines : java.util.Arrays.asList(in, out))
+		{
+			shown.append('\n');
+			for (ChestPlan.Line line : lines)
+			{
+				shown.append(line.text).append('=').append(state.lineIcons.get(CoxStoragePlannerPlugin.iconKey(line))).append(';');
+			}
+		}
+		if (shown.toString().equals(chestFlowShown))
+		{
+			return;
+		}
+		chestFlowShown = shown.toString();
+		chestFlow.clear();
+		if (!in.isEmpty())
+		{
+			chestFlow.addRow(flowRow("In", in, state), 0);
+		}
+		if (!out.isEmpty())
+		{
+			chestFlow.addRow(flowRow("Out", out, state), in.isEmpty() ? 0 : 4);
+		}
+	}
+
+	private JPanel flowRow(String title, List<ChestPlan.Line> lines, PanelState state)
+	{
+		JPanel row = new JPanel(new FlowLayout(FlowLayout.LEFT, 2, 0));
+		row.setOpaque(false);
+		JLabel label = text(title, MUTED);
+		label.setPreferredSize(new Dimension(26, 32));
+		row.add(label);
+		StringBuilder all = new StringBuilder("<html>");
+		for (int i = 0; i < lines.size(); i++)
+		{
+			ChestPlan.Line line = lines.get(i);
+			all.append(i == 0 ? "" : "<br>").append(line.text.replace("<", "&lt;"));
+			if (i >= MAX_ICONS)
+			{
+				continue;
+			}
+			Integer itemId = state.lineIcons.get(CoxStoragePlannerPlugin.iconKey(line));
+			JLabel cell;
+			if (itemId != null && !line.everything && !line.everythingElse)
+			{
+				cell = new JLabel();
+				icons.set(cell, itemId, line.count);
+			}
+			else
+			{
+				// nothing seen by that name yet: the start of the name stands in
+				String name = line.everything ? "all" : line.everythingElse ? "rest" : line.name;
+				cell = small(name.length() > 6 ? name.substring(0, 5) + "…" : name, Color.WHITE);
+				cell.setHorizontalAlignment(SwingConstants.CENTER);
+				cell.setOpaque(true);
+				cell.setBackground(ColorScheme.DARK_GRAY_COLOR);
+			}
+			cell.setPreferredSize(new Dimension(36, 32));
+			cell.setToolTipText(line.text);
+			row.add(cell);
+		}
+		if (lines.size() > MAX_ICONS)
+		{
+			JLabel more = text("…", MUTED);
+			more.setToolTipText(all + "</html>");
+			row.add(more);
+		}
+		row.setToolTipText(all + "</html>");
+		return row;
 	}
 
 	private static void setIfIdle(javax.swing.text.JTextComponent field, String text)
@@ -628,13 +706,14 @@ class CoxStoragePanel extends PluginPanel
 		}
 	}
 
-	/** Team | Solo, which set of "need" numbers is shown and edited. */
+	/** Team | Solo: which set of chest plans and "need" numbers is shown and edited. */
 	private JPanel needsTabs()
 	{
 		JPanel tabs = new JPanel(new FlowLayout(FlowLayout.RIGHT, 6, 0));
 		tabs.setOpaque(false);
 		for (JLabel tab : new JLabel[]{teamTab, soloTab})
 		{
+			tab.setFont(FontManager.getRunescapeFont());
 			tab.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
 			tab.addMouseListener(new MouseAdapter()
 			{
@@ -657,7 +736,13 @@ class CoxStoragePanel extends PluginPanel
 		{
 			lastState = state;
 			updateChests(state);
-			updateSupplies(state);
+			updateTabs(state);
+			suppliesHeader.setVisible(state.suppliesTracker);
+			suppliesBody.setVisible(state.suppliesTracker);
+			if (state.suppliesTracker)
+			{
+				updateSupplies(state);
+			}
 		}
 		finally
 		{
@@ -672,7 +757,6 @@ class CoxStoragePanel extends PluginPanel
 		units = state.units;
 		for (Potion potion : haveLabels.keySet())
 		{
-			supplyRows.get(potion).setVisible(state.applies(potion));
 			int need = state.need.getOrDefault(potion, 0);
 			int have = state.have(potion);
 			int shortfall = state.shortfall(potion);
@@ -718,13 +802,20 @@ class CoxStoragePanel extends PluginPanel
 				field.setText(value);
 			}
 		}
+		rebuildStorageGrid(state);
+	}
+
+	/** The switch only shows while there are two sets of something to switch between. */
+	private void updateTabs(PanelState state)
+	{
+		boolean doses = state.suppliesTracker && state.separateSoloNeeds;
+		tabs.setVisible(state.separateSoloChests || doses);
 		teamTab.setForeground(state.solo ? MUTED : Color.WHITE);
 		soloTab.setForeground(state.solo ? Color.WHITE : MUTED);
-		String same = state.separateSoloNeeds ? "" : "<br>Same numbers for both until 'Separate doses for solo raids' is on in the settings";
-		String chests = state.separateSoloChests ? " and the chest plans" : "";
+		String what = state.separateSoloChests && doses ? "The chest plans and the doses you want for Olm"
+			: doses ? "The doses you want for Olm" : "The chest plans";
 		String inRaid = state.inRaid ? "<br>Picked from the party size; click to use the other set for this raid" : "";
-		teamTab.setToolTipText("<html>What you need for Olm" + chests + " in a team raid" + same + inRaid + "</html>");
-		soloTab.setToolTipText("<html>What you need for Olm" + chests + " in a solo raid" + same + inRaid + "</html>");
-		rebuildStorageGrid(state);
+		teamTab.setToolTipText("<html>" + what + " for a team raid" + inRaid + "</html>");
+		soloTab.setToolTipText("<html>" + what + " for a solo raid" + inRaid + "</html>");
 	}
 }

@@ -1,9 +1,7 @@
 package com.coxstorageplanner;
 
 import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNull;
-import static org.junit.Assert.assertTrue;
 import org.junit.Test;
 
 public class PotionTest
@@ -21,35 +19,18 @@ public class PotionTest
 	}
 
 	@Test
-	public void staminaOnlyCountsSolo()
+	public void partyMessagesKeepTheLayoutOfTheFirstRelease()
 	{
-		assertEquals(4, Potion.STAMINA.doses(12625));
-		assertEquals(1, Potion.STAMINA.doses(12631));
-		assertEquals(0, Potion.STAMINA.doses(12626));
-		assertEquals(12625, Potion.STAMINA.getIconItemId());
-		assertTrue(Potion.STAMINA.isSoloOnly());
-		assertFalse(Potion.STAMINA.isClaimable());
-		PanelState state = new PanelState();
-		assertFalse(state.applies(Potion.STAMINA));
-		state.solo = true;
-		assertFalse(state.applies(Potion.STAMINA));
-		state.trackStamina = true;
-		assertTrue(state.applies(Potion.STAMINA));
-		assertFalse(state.applies(Potion.SPLIT_OVERLOAD));
-	}
-
-	@Test
-	public void listsWhatIsShort()
-	{
-		PanelState state = new PanelState();
-		state.solo = true;
-		state.trackStamina = true;
-		state.units = NeedUnits.POTIONS;
-		state.need.put(Potion.XERICS_AID, 24);
-		state.need.put(Potion.STAMINA, 4);
-		state.inventory = Supplies.count(new int[]{20984, 12629}, new int[]{4, 1});
-		assertEquals("Xeric's aid 2 potions, Stamina 0.5 potions", state.shortfalls());
-		state.need.clear();
-		assertEquals("", state.shortfalls());
+		// 1.0.0 had a potion between prayer enhance and elder; the gap stays so both versions read each other
+		Supplies held = Supplies.count(new int[]{20996, 20984, 20916}, new int[]{1, 2, 1});
+		int[] wire = held.toWire();
+		assertEquals(Potion.values().length + 1, wire.length);
+		assertEquals(4, wire[0]);
+		assertEquals(8, wire[1]);
+		assertEquals(0, wire[4]);
+		assertEquals(4, wire[5]);
+		assertEquals(held, Supplies.fromWire(wire));
+		assertEquals(Supplies.EMPTY, Supplies.fromWire(null));
+		assertEquals(8, Supplies.fromWire(new int[]{0, 8}).doses(Potion.XERICS_AID));
 	}
 }

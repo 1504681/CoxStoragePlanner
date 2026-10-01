@@ -1,28 +1,34 @@
 # CoX Storage Planner
 
-A per-chest deposit and withdraw plan for Chambers of Xeric, and a count of the potion doses you have against what you want for Olm. Roles, claims and team reminders are in the separate [CoX Team Utilities](https://github.com/1504681/CoxTeamUtilities) plugin.
+A per-chest deposit and withdraw plan for Chambers of Xeric, and an optional count of the potion doses you have against what you want for Olm. Roles, claims and team reminders are in the separate [CoX Team Utilities](https://github.com/1504681/CoxTeamUtilities) plugin.
 
 ## Chests
 
-Each storage unit in the raid gets its own plan: what to put in and what to take out. Open a storage unit and the chest appears under **Chests**, named after its room (`Ice Demon`, `Farming 1`, `Farming 2`; the End rooms are `Pre-Vanguards` and `Pre-Olm`, after what you're packing for; `Farming` is numbered by floor, whichever layout the game picked for them; a storage in a stretch the plugin can't place, like the one after the tightrope, counts as the room before it). The dropdown lists chests in the order the raid reaches them. Rename it, then fill the two lists: one item per line, matched from the start of the name so `Xeric's aid` is any dose, `*` and `?` as wildcards (`*chinchompa`, `Dragon *`), `Stinkhorn mushroom, 3` for a number, `Ayak | Sang* staff*` for either, `everything` to empty the inventory. Numbers are quantities, so a stack of 14 juice counts as 14. A Put in line without a number means all of them; with one (`Endarkened*, 11`) the step is done once that many went in since you opened the storage, or the storage already holds that many. A Take out line is done when your inventory and worn gear together hold at least that many. One whose item is nowhere, not on you and not in the storage, is skipped so the order moves on; potions light up fullest first, so the 3-doses wait until the 4s are gone.
+Each storage unit in the raid gets its own plan: what to put in and what to take out. Open a storage unit and the chest appears under **Chests**, named after its room (`Ice Demon`, `Farming 1`, `Farming 2`; the End rooms are `Pre-Vanguards` and `Pre-Olm`, after what you're packing for; `Farming` is numbered by floor, whichever layout the game picked for them; a storage in a stretch the plugin can't place, like the one after the tightrope, counts as the room before it). The dropdown lists chests in the order the raid reaches them. Fill the two lists: one item per line, matched from the start of the name so `Xeric's aid` is any dose, `*` and `?` as wildcards (`*chinchompa`, `Dragon *`), `Stinkhorn mushroom, 3` for a number, `Ayak | Sang* staff*` for either, `everything` to empty the inventory. Numbers are quantities, so a stack of 14 juice counts as 14. A Put in line without a number means all of them; with one (`Endarkened*, 11`) the step is done once that many went in since you opened the storage, or the storage already holds that many. A Take out line is done when your inventory and worn gear together hold at least that many. One whose item is nowhere, not on you and not in the storage, is skipped so the order moves on; potions light up fullest first, so the 3-doses wait until the 4s are gone.
 
 The easy way to fill the lists is to click: tick **Mark by clicking** and, with a storage open, left-clicking an item in the storage adds it to Take out and one in the side inventory to Put in (with no storage open, inventory items go to the chest picked in the sidebar). Every click adds one more, so three clicks on a stinkhorn make `Stinkhorn mushroom, 3`, and the order you click is the withdraw order. `Unmark` on the right-click menu takes one away. Marking is off again when you leave the raid.
 
 A chest works in three phases while its storage is open: gear to wear, then things to put in, then things to take out. A Take out line starting with `wear` (`wear Scythe of vitur`) is gear to put on; it glows purple wherever it is, storage or inventory, until it's worn, and nothing else lights up until all of it is. Then the Put in items glow; `everything else` in Put in means whatever the Take out list doesn't keep. Once the inventory is clear the Take out list lights, in order. With *Put back what's out of order* on (default), anything you carry that belongs to a later step of an ordered list is asked back into the storage first, so it can come out in its place and the layout ends up right. Gear you put on stays ticked off, and the same item on a later line means one more of it.
 
-**Copy my loadout** next to Take out sets all of that up from what you're wearing and carrying right now: worn gear as `wear` lines, then the inventory slot by slot (a run of the same item becomes one line with its number, `Xeric's aid, 3`), *Withdraw in this order* ticked, and `everything else` in Put in if it was empty. Set the chest before Olm up that way once, with the inventory laid out how you want it, and the plugin walks you through it every raid: put the gear on, dump what's left, pull the rest in order, same layout.
+**Copy my loadout** next to Take out sets all of that up from what you're wearing and carrying right now: worn gear as `wear` lines, then the inventory slot by slot (a run of the same item becomes one line with its number, `Xeric's aid, 3`), *Ordered withdrawal* ticked, and `everything else` in Put in if it was empty. Set the chest before Olm up that way once, with the inventory laid out how you want it, and the plugin walks you through it every raid: put the gear on, dump what's left, pull the rest in order, same layout.
 
-With *Separate chests for solo raids* on, solo raids get their own set of chest plans (it starts as a copy of the team ones): inside a raid the party size picks the set (click the **Team | Solo** switch to override it for that raid), outside it the switch does, and *Copy from Team* / *Copy from Solo* under the chest header brings the other set's plan for that chest over.
+With *Separate chests for solo raids* on, solo raids get their own set of chest plans (it starts as a copy of the team ones): inside a raid the party size picks the set (click the **Team | Solo** switch to override it for that raid), outside it the switch does.
 
-Tick **Withdraw in this order** and the list becomes steps 1, 2, 3. While the storage is open the items still to move glow: in the side inventory what goes in, in the storage what comes out. Only as many light as are still to move, so `Xeric's aid, 2` with one already in the inventory lights one, not the whole row. Ordered lists light the next four items: the next one gets a big numbered orb over the item, the three after it small ones in the corner, fainter the further down the order they are; a step that wants more than one shows `x5` in the slot's top right corner; a setting switches that to only the next item, or to all of them in a gradient from the first colour to the last. Colours and the pulse are settings too, and there's an optional on-screen list of the steps. The storage unit in the room you're in carries a `?` while its chest still has something to wear, put in or take out, and a green tick once the inventory says it's all done (setting).
+Tick **Ordered withdrawal** and the list becomes clicks 1, 2, 3. While the storage is open the items still to move glow: in the side inventory what goes in, in the storage what comes out. Every click has its own number: `Xeric's aid, 2` lights two of the five aids in the storage as 17 and 18 and leaves the rest dark, a stack is one click whatever the count (with `x5` in the slot's corner), and a step whose item isn't anywhere (not on you, not in the storage) takes no number. The next four clicks light: the next one gets a big orb over the item, the three after it small ones in the corner, shifting from the glow colour to the end colour. A setting switches that to only the next click, or to all of them. When the next item is scrolled out of view, the storage's scroll arrow lights, up or down (setting). The storage unit in the room you're in carries a `?` while its chest still has something to wear, put in or take out, and a green tick once the inventory says it's all done (setting).
+
+Under the lists the sidebar shows the plan as icons, what goes in and what comes out, `…` after the fourth. An item gets its icon once the plugin has seen it in a raid; until then the start of its name stands in.
+
+The sidebar icon sits near the bottom of the toolbar and only shows inside the raid; *Hide outside of the raid* and *Always hide the sidebar icon* change that.
 
 ## Supplies
 
+Off by default: turn on *Supplies tracker* (Sidebar section of the settings). Its own settings are in the *Supplies tracker* section below that.
+
 Overload, Xeric's aid, Revitalisation and Prayer enhance in your inventory and private storage (shared storage too if the setting is on), shown as potions or as doses (setting), against the `need` number you type next to each: what you want to have when you get to Olm. Short rows go red with how much more to pick up.
 
-**Team** and **Solo** at the top switch between two sets of `need` numbers; with *Stamina in solo raids* on, Solo adds a Stamina row for the running at Olm. Both use the same numbers unless *Separate doses for solo raids* is on. Inside a raid the plugin picks team or solo from the raid's party size. Clicking the switch during a raid overrides that for the rest of it, so a duo can run the solo numbers and chests. Defaults: team 1 Overload, 6 Xeric's aid, 3 Revitalisation, 1 Prayer enhance; solo the same with 4 Revitalisation and 1 Stamina.
+With *Separate doses for solo raids* on, **Team** and **Solo** at the top switch between two sets of `need` numbers. Inside a raid the plugin picks team or solo from the raid's party size. Clicking the switch during a raid overrides that for the rest of it, so a duo can run the solo numbers and chests. Defaults: team 1 Overload, 6 Xeric's aid, 3 Revitalisation, 1 Prayer enhance; solo the same with 4 Revitalisation.
 
-Under the rows a grid shows what each party member holds in inventory + private storage, the shared storage, and the total. `3?` is an inventory whose private storage hasn't been opened yet; `×` is a member without the plugin (the game doesn't show other players' inventories, so there's nothing to know). Join a party with the core Party plugin for this.
+Under the rows a grid shows what each party member holds in inventory + private storage, the shared storage, and the total. `3?` is an inventory whose private storage hasn't been opened yet; `×` is a member without the plugin or with its tracker off (the game doesn't show other players' inventories, so there's nothing to know). Join a party with the core Party plugin for this.
 
 The game only sends a storage's contents while its interface is open, so both storages show `?` until someone has opened them in the current raid (a party member's view of the shared storage is used if you haven't opened it yourself). A deposit or withdrawal made as the interface closes doesn't come back from the game either, so the plugin works those out from what left or entered your inventory.
 
@@ -30,21 +36,34 @@ The game only sends a storage's contents while its interface is open, so both st
 
 | Setting | Default |
 |---|---|
+| **Chests** | |
+| Glow items | on |
+| Ordered withdrawal glow | next four clicks, biggest first |
+| Light the scroll arrow | on |
+| ? and tick over the storage unit | on |
+| Put back what's out of order | on |
+| Separate chests for solo raids | off |
+| Glow colour / end colour / wear colour | cyan / pink / purple |
+| Pulse | on |
+| **Sidebar** | |
+| Hide outside of the raid | on |
+| Always hide the sidebar icon | off |
+| Supplies tracker | off |
+| **Supplies tracker** | |
 | Show supplies as | potions |
 | Separate doses for solo raids | off |
-| Stamina in solo raids | off |
 | Count shared storage | off |
 | Count split overloads | on |
-| Separate chests for solo raids | off |
-| Mark the storage unit | on |
-| Steps overlay | off |
-| Glow items | on |
-| Ordered withdraw glow | next four, biggest first |
-| Put back what's out of order | on |
-| Glow colour / gradient end colour / wear colour | cyan / pink / purple |
-| Pulse | on |
 
 ## Changelog
+
+1.1.0
+- Every click of an ordered withdrawal has its own number: two of five brews light as 17 and 18. Items that aren't anywhere take no number.
+- The next four orbs go from the glow colour to the end colour.
+- The storage's scroll arrow lights when the next item is out of view.
+- Sidebar: the plan as item icons, bigger text, tidier layout. The icon sits near the bottom and hides outside the raid (settings).
+- Supplies tracker is off by default, in its own settings section.
+- Removed: Stamina in solo raids, the steps overlay, the chest rename field, Copy from Team / Solo.
 
 1.0.0: first release.
 

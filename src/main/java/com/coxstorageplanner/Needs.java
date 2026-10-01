@@ -27,12 +27,11 @@ public final class Needs
 		return needs;
 	}
 
-	/** A first plan for a solo: more running, so a stamina and another revitalisation. */
+	/** A first plan for a solo: more running, so another revitalisation. */
 	public static Needs soloDefaults()
 	{
 		Needs needs = defaults();
 		needs.set(Potion.REVITALISATION, 16);
-		needs.set(Potion.STAMINA, 4);
 		return needs;
 	}
 

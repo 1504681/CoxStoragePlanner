@@ -2,10 +2,12 @@ package com.coxstorageplanner;
 
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Set;
 import java.util.regex.Pattern;
 
 /**
@@ -27,19 +29,29 @@ public final class ChestProgress
 		public final ChestPlan.Line line;
 		public final boolean deposit;
 		public final boolean done;
-		/** Position in the withdraw order, 1-based, 0 for deposits. */
+		/** Position in the withdraw list, 1-based, 0 for deposits. */
 		public final int order;
 		/** A withdrawal skipped because the item is neither on you nor in the storage; done as well. */
 		public final boolean missing;
 		/** How many more still to move, so only that many light up; MAX_VALUE for all of them. */
 		public final int remaining;
+		/**
+		 * Withdrawals: the number of this step's next click, counting every click of the plan from 1.
+		 * "Xeric's aid, 2" is two clicks, a stack is one, and a skipped step is none.
+		 */
+		public final int click;
+		/** Withdrawals: clicks still to make before this step's next one, 0 for the very next click. */
+		public final int rank;
+		/** Withdrawals: whether it comes out as one stack, so one click whatever the count. */
+		public final boolean stack;
 
 		Step(ChestPlan.Line line, boolean deposit, boolean done, int order, int remaining)
 		{
-			this(line, deposit, done, order, false, remaining);
+			this(line, deposit, done, order, false, remaining, 0, 0, false);
 		}
 
-		Step(ChestPlan.Line line, boolean deposit, boolean done, int order, boolean missing, int remaining)
+		Step(ChestPlan.Line line, boolean deposit, boolean done, int order, boolean missing, int remaining,
+			int click, int rank, boolean stack)
 		{
 			this.line = line;
 			this.deposit = deposit;
@@ -47,6 +59,9 @@ public final class ChestProgress
 			this.order = order;
 			this.missing = missing;
 			this.remaining = done ? 0 : remaining;
+			this.click = click;
+			this.rank = rank;
+			this.stack = stack;
 		}
 	}
 
@@ -62,6 +77,8 @@ public final class ChestProgress
 	public final List<Step> withdrawals;
 	/** Carried items that belong to a later step of an ordered plan, to put back before taking out. */
 	public final List<String> outOfOrder;
+	/** Clicks the whole take-out list comes to, skipped steps left out. */
+	public final int clicks;
 	/** What the storage holds, null when the client hasn't seen it. */
 	private final Map<String, Integer> storage;
 
@@ -89,6 +106,13 @@ public final class ChestProgress
 	/** @param putBack whether an ordered plan wants carried items of later steps put back first */
 	public ChestProgress(ChestPlan plan, Map<String, Integer> inventory, Map<String, Integer> worn,
 		Map<String, Integer> openedWith, Map<String, Integer> storage, boolean putBack)
+	{
+		this(plan, inventory, worn, openedWith, storage, putBack, Collections.emptySet());
+	}
+
+	/** @param stackable names of the items that stack, which come out in one click whatever the count */
+	public ChestProgress(ChestPlan plan, Map<String, Integer> inventory, Map<String, Integer> worn,
+		Map<String, Integer> openedWith, Map<String, Integer> storage, boolean putBack, Set<String> stackable)
 	{
 		this.plan = plan;
 		this.storage = storage;
@@ -130,7 +154,11 @@ public final class ChestProgress
 		}
 		List<Step> withdrawals = new ArrayList<>();
 		Map<String, Integer> asked = new LinkedHashMap<>();
+		// what's left in the storage for the steps further down, once the ones before took theirs
+		Map<String, Integer> left = storage == null ? null : new HashMap<>(storage);
 		int order = 0;
+		int clicks = 0;
+		int pending = 0;
 		for (ChestPlan.Line line : takeOut)
 		{
 			if (line.wear)
@@ -140,11 +168,21 @@ public final class ChestProgress
 			// "Xeric's aid" twice means two of them
 			int need = asked.merge(line.name.toLowerCase(Locale.ROOT), line.count, Integer::sum);
 			int have = count(line, inventory) + count(line, worn);
-			boolean done = have >= need;
+			// what this line has of its own, after the same line further up took its share
+			int got = Math.max(0, Math.min(line.count, have - (need - line.count)));
+			boolean done = got >= line.count;
+			int remaining = line.count - got;
+			int there = done ? 0 : left == null ? remaining : take(line, left, remaining);
 			// nowhere to get it from: skip the step rather than wait on it forever
-			boolean missing = !done && storage != null && count(line, storage) == 0;
-			withdrawals.add(new Step(line, false, done || missing, ++order, missing, need - have));
+			boolean missing = !done && left != null && there == 0;
+			boolean stack = stacks(line, stackable, inventory) || stacks(line, stackable, held);
+			int mine = stack ? (done || there > 0 ? 1 : 0) : got + there;
+			int made = stack ? (done ? 1 : 0) : got;
+			withdrawals.add(new Step(line, false, done || missing, ++order, missing, remaining, clicks + made + 1, pending, stack));
+			clicks += mine;
+			pending += mine - made;
 		}
+		this.clicks = clicks;
 		List<String> outOfOrder = new ArrayList<>();
 		if (putBack && plan.isOrdered())
 		{
@@ -224,6 +262,38 @@ public final class ChestProgress
 			}
 		}
 		return count;
+	}
+
+	/** Takes up to {@code want} of a line's items out of a container map. @return how many it got */
+	private static int take(ChestPlan.Line line, Map<String, Integer> items, int want)
+	{
+		int taken = 0;
+		for (Map.Entry<String, Integer> e : items.entrySet())
+		{
+			if (taken < want && e.getValue() > 0 && line.matches(e.getKey()))
+			{
+				int some = Math.min(want - taken, e.getValue());
+				e.setValue(e.getValue() - some);
+				taken += some;
+			}
+		}
+		return taken;
+	}
+
+	private static boolean stacks(ChestPlan.Line line, Set<String> stackable, Map<String, Integer> items)
+	{
+		if (stackable.isEmpty())
+		{
+			return false;
+		}
+		for (String name : items.keySet())
+		{
+			if (stackable.contains(name) && line.matches(name))
+			{
+				return true;
+			}
+		}
+		return false;
 	}
 
 	/**
@@ -366,33 +436,49 @@ public final class ChestProgress
 
 	/**
 	 * The withdrawal step an item in the storage belongs to and hasn't been done, or null.
-	 * With an ordered plan only the next {@code limit} steps still to do count. Of the potions
+	 * With an ordered plan only steps within the next {@code limit} clicks count. Of the potions
 	 * in the storage a step matches only the fullest lights up, so a 3-dose waits until the 4s are gone.
 	 */
 	public Step highlightsWithdraw(String itemName, int limit)
 	{
+		List<Step> steps = withdrawSteps(itemName, limit);
+		return steps.isEmpty() ? null : steps.get(0);
+	}
+
+	/** Every step {@link #highlightsWithdraw} could mean, in order: "Xeric's aid" on two lines is two steps. */
+	public List<Step> withdrawSteps(String itemName, int limit)
+	{
 		if (phase() != Phase.WITHDRAW)
 		{
-			return null;
+			return Collections.emptyList();
 		}
-		int rank = 0;
+		List<Step> steps = new ArrayList<>();
 		for (Step step : withdrawals)
 		{
 			if (step.done)
 			{
 				continue;
 			}
-			if (plan.isOrdered() && rank >= limit)
+			if (plan.isOrdered() && step.rank >= limit)
 			{
-				return null;
+				break;
 			}
-			if (step.line.matches(itemName))
+			if (step.line.matches(itemName) && fullest(step.line, itemName))
 			{
-				return fullest(step.line, itemName) ? step : null;
+				steps.add(step);
 			}
-			rank++;
 		}
-		return null;
+		return steps;
+	}
+
+	/** Whether an item in the storage is what to click next: gear to wear, or the next withdrawal (any, unordered). */
+	public boolean wantsNext(String itemName)
+	{
+		if (wearStep(itemName) != null)
+		{
+			return true;
+		}
+		return highlightsWithdraw(itemName, 1) != null;
 	}
 
 	/** Whether no fuller dose of this potion is in the storage; true for anything that isn't a potion. */
@@ -418,23 +504,5 @@ public final class ChestProgress
 	{
 		java.util.regex.Matcher m = DOSES.matcher(itemName);
 		return m.find() ? itemName.charAt(m.start() + 1) - '0' : -1;
-	}
-
-	/** How many withdrawals still to do come before this one: 0 for the next one. */
-	public int rank(Step step)
-	{
-		int rank = 0;
-		for (Step other : withdrawals)
-		{
-			if (other == step)
-			{
-				return rank;
-			}
-			if (!other.done)
-			{
-				rank++;
-			}
-		}
-		return -1;
 	}
 }

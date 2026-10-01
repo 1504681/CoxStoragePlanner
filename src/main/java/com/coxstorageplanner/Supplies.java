@@ -69,6 +69,35 @@ public final class Supplies
 		return doses.clone();
 	}
 
+	/** Where 1.0.0 had a potion that's gone since; party messages keep the gap so both versions read each other. */
+	private static final int WIRE_GAP = 4;
+
+	/** The doses as party messages carry them. */
+	public int[] toWire()
+	{
+		int[] wire = new int[doses.length + 1];
+		for (int i = 0; i < doses.length; i++)
+		{
+			wire[i < WIRE_GAP ? i : i + 1] = doses[i];
+		}
+		return wire;
+	}
+
+	/** @param wire doses from a party message; missing entries count as 0 */
+	public static Supplies fromWire(int[] wire)
+	{
+		int[] doses = new int[Potion.values().length];
+		if (wire != null)
+		{
+			for (int i = 0; i < doses.length; i++)
+			{
+				int at = i < WIRE_GAP ? i : i + 1;
+				doses[i] = at < wire.length ? Math.max(0, wire[at]) : 0;
+			}
+		}
+		return new Supplies(doses);
+	}
+
 	@Override
 	public boolean equals(Object o)
 	{

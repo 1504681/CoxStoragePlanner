@@ -33,7 +33,8 @@ final class PanelState
 	boolean separateSoloNeeds;
 	/** Whether solo raids have their own chest plans, so {@link #chests} is the set for {@link #solo}. */
 	boolean separateSoloChests;
-	boolean trackStamina;
+	/** Whether the Supplies part of the sidebar is on. */
+	boolean suppliesTracker;
 	NeedUnits units = NeedUnits.POTIONS;
 	ChestBook chests = new ChestBook();
 	/** Chest of the room the player is in, null outside one. */
@@ -44,6 +45,8 @@ final class PanelState
 	Map<String, Integer> wornItems = new LinkedHashMap<>();
 	/** Progress at the storage that's open right now, null when none is. */
 	ChestProgress openChest;
+	/** Item ids seen for the lines of the chest lists, by the line's text in lower case, for the sidebar's icons. */
+	Map<String, Integer> lineIcons = new LinkedHashMap<>();
 	/** Whether clicking items in a storage or the inventory adds them to the chest's lists. */
 	boolean marking;
 	/** Whether an ordered plan wants carried items of later steps put back first. */
@@ -104,27 +107,5 @@ final class PanelState
 	int shortfall(Potion potion)
 	{
 		return Math.max(0, need.getOrDefault(potion, 0) - have(potion));
-	}
-
-	/** Whether the supply row for this potion applies right now. */
-	boolean applies(Potion potion)
-	{
-		return potion.isSupply() && (!potion.isSoloOnly() || (solo && trackStamina));
-	}
-
-	/** "Xeric's aid 8 doses, Stamina 1 potion" for everything short, empty when nothing is. */
-	String shortfalls()
-	{
-		StringBuilder text = new StringBuilder();
-		for (Potion potion : Potion.values())
-		{
-			int shortfall = applies(potion) ? shortfall(potion) : 0;
-			if (shortfall > 0)
-			{
-				text.append(text.length() == 0 ? "" : ", ").append(potion.getDisplayName()).append(' ')
-					.append(units.format(shortfall)).append(' ').append(units.getWord());
-			}
-		}
-		return text.toString();
 	}
 }

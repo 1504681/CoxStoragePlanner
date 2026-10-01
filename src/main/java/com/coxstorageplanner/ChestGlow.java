@@ -3,12 +3,12 @@ package com.coxstorageplanner;
 /** Which items in the storage light up when a chest's withdrawals are ordered. */
 public enum ChestGlow
 {
-	NEXT_ONLY("Only the next one", 1),
-	NEXT_FOUR("Next four, biggest first", 4),
+	NEXT_ONLY("Only the next click", 1),
+	NEXT_FOUR("Next four clicks, biggest first", 4),
 	GRADIENT("All, first to last", Integer.MAX_VALUE);
 
 	private final String displayName;
-	/** How many of the steps still to do light up, from the next one on. */
+	/** How many of the clicks still to make light up, from the next one on. */
 	private final int steps;
 
 	ChestGlow(String displayName, int steps)

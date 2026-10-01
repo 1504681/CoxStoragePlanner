@@ -19,9 +19,9 @@ public final class MemberSupplies
 
 	public static MemberSupplies from(CoxStorageMessage message)
 	{
-		return new MemberSupplies(Supplies.of(message.getCarried()),
-			message.getStored() == null ? null : Supplies.of(message.getStored()),
-			message.getShared() == null ? null : Supplies.of(message.getShared()));
+		return new MemberSupplies(Supplies.fromWire(message.getCarried()),
+			message.getStored() == null ? null : Supplies.fromWire(message.getStored()),
+			message.getShared() == null ? null : Supplies.fromWire(message.getShared()));
 	}
 
 	public Supplies getCarried()

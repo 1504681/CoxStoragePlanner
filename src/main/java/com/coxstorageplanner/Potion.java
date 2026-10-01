@@ -5,20 +5,18 @@ package com.coxstorageplanner;
  * (-) 1-4 dose, regular 1-4 dose, (+) 1-4 dose.
  * The supply potions get a row in the sidebar totals. Elder, twisted and kodai are only counted
  * as the three parts of a split overload, which is what Vanguards drop one set of.
- * Stamina is brought from outside for the running at a solo Olm and only matters in a solo raid.
  */
 public enum Potion
 {
-	OVERLOAD("Overload", "Ovl", Ids.raid(20985), true, true, false),
-	XERICS_AID("Xeric's aid", "Aid", Ids.raid(20973), true, true, false),
-	REVITALISATION("Revitalisation", "Revit", Ids.raid(20949), true, true, false),
-	PRAYER_ENHANCE("Prayer enhance", "Enh", Ids.raid(20961), true, true, false),
-	STAMINA("Stamina", "Stam", new int[]{12631, 12629, 12627, 12625}, true, false, true),
-	ELDER("Elder", "Elder", Ids.raid(20913), false, false, false),
-	TWISTED("Twisted", "Twisted", Ids.raid(20925), false, false, false),
-	KODAI("Kodai", "Kodai", Ids.raid(20937), false, false, false),
+	OVERLOAD("Overload", "Ovl", Ids.raid(20985), true, true),
+	XERICS_AID("Xeric's aid", "Aid", Ids.raid(20973), true, true),
+	REVITALISATION("Revitalisation", "Revit", Ids.raid(20949), true, true),
+	PRAYER_ENHANCE("Prayer enhance", "Enh", Ids.raid(20961), true, true),
+	ELDER("Elder", "Elder", Ids.raid(20913), false, false),
+	TWISTED("Twisted", "Twisted", Ids.raid(20925), false, false),
+	KODAI("Kodai", "Kodai", Ids.raid(20937), false, false),
 	/** One elder, one twisted and one kodai, claimed together. Not an item of its own. */
-	SPLIT_OVERLOAD("Split overload", "Split", new int[0], false, true, false);
+	SPLIT_OVERLOAD("Split overload", "Split", new int[0], false, true);
 
 	public static final int DOSES_PER_POTION = 4;
 
@@ -42,16 +40,14 @@ public enum Potion
 	private final int[] itemIds;
 	private final boolean supply;
 	private final boolean claimable;
-	private final boolean soloOnly;
 
-	Potion(String displayName, String shortName, int[] itemIds, boolean supply, boolean claimable, boolean soloOnly)
+	Potion(String displayName, String shortName, int[] itemIds, boolean supply, boolean claimable)
 	{
 		this.displayName = displayName;
 		this.shortName = shortName;
 		this.itemIds = itemIds;
 		this.supply = supply;
 		this.claimable = claimable;
-		this.soloOnly = soloOnly;
 	}
 
 	public String getDisplayName()
@@ -74,12 +70,6 @@ public enum Potion
 	public boolean isClaimable()
 	{
 		return claimable;
-	}
-
-	/** Whether it only counts in a solo raid. */
-	public boolean isSoloOnly()
-	{
-		return soloOnly;
 	}
 
 	/** Item id of the full potion, used for the sidebar icon. */

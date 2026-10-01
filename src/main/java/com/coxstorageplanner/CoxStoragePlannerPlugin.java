@@ -24,6 +24,7 @@ import net.runelite.api.Client;
 import net.runelite.api.GameObject;
 import net.runelite.api.GameState;
 import net.runelite.api.Item;
+import net.runelite.api.ItemComposition;
 import net.runelite.api.ItemContainer;
 import net.runelite.api.MenuAction;
 import net.runelite.api.MenuEntry;
@@ -71,7 +72,7 @@ import net.runelite.client.ui.overlay.OverlayManager;
 public class CoxStoragePlannerPlugin extends Plugin implements CoxStoragePanel.Actions
 {
 	// keep in sync with build.gradle
-	public static final String VERSION = "1.0.0";
+	public static final String VERSION = "1.1.0";
 
 	/** Ticks outside before a raid counts as left, so a relog or a reload doesn't wipe the raid's state. */
 	private static final int LEAVE_TICKS = 5;
@@ -100,9 +101,10 @@ public class CoxStoragePlannerPlugin extends Plugin implements CoxStoragePanel.A
 	private OverlayManager overlayManager;
 
 	@Inject
-	private ChestOverlay chestOverlay;
-	@Inject
 	private ChestMarkerOverlay chestMarkerOverlay;
+
+	@Inject
+	private ChestScrollOverlay chestScrollOverlay;
 
 	@Inject
 	private ChestItemOverlay chestItemOverlay;
@@ -118,6 +120,8 @@ public class CoxStoragePlannerPlugin extends Plugin implements CoxStoragePanel.A
 
 	private CoxStoragePanel panel;
 	private NavigationButton navigationButton;
+	/** Whether the sidebar icon is on the toolbar right now. Swing thread. */
+	private boolean navigationShown;
 
 	private volatile ChestBook chests = new ChestBook();
 	/** The chest plans for solo raids, used when the setting keeps them apart. */
@@ -134,6 +138,10 @@ public class CoxStoragePlannerPlugin extends Plugin implements CoxStoragePanel.A
 	/** Template chunks inside the raid the room table didn't know, logged once each. */
 	private final Set<Integer> unknownChunks = new HashSet<>();
 	private final Map<Integer, String> itemNames = new java.util.concurrent.ConcurrentHashMap<>();
+	/** Names of the items seen that stack, which come out of a storage in one click. */
+	private final Set<String> stackableNames = java.util.concurrent.ConcurrentHashMap.newKeySet();
+	/** Item ids seen for the lines of the chest lists, by the line's text in lower case, for the sidebar's icons. */
+	private final Map<String, Integer> lineIcons = new java.util.concurrent.ConcurrentHashMap<>();
 	/** While on, left-clicking an item in a storage or the inventory adds it to the chest's lists. */
 	private volatile boolean marking;
 	/** The chest picked in the sidebar, marked from the inventory when no storage is open. */
@@ -196,18 +204,21 @@ public class CoxStoragePlannerPlugin extends Plugin implements CoxStoragePanel.A
 		chestsSolo = ChestBook.parse(config.chestsSolo(), gson);
 		migrateChestKeys(chests);
 		migrateChestKeys(chestsSolo);
+		loadLineIcons();
 
-		panel = new CoxStoragePanel(this, (label, itemId) -> itemManager.getImage(itemId).addTo(label));
+		panel = new CoxStoragePanel(this, (label, itemId, quantity) ->
+			itemManager.getImage(itemId, quantity, quantity > 1).addTo(label));
+		// a high number, so the icon sits near the bottom of the sidebar
 		navigationButton = NavigationButton.builder()
 			.tooltip("CoX Storage Planner")
 			.icon(icon())
-			.priority(7)
+			.priority(100)
 			.panel(panel)
 			.build();
-		clientToolbar.addNavigation(navigationButton);
-		overlayManager.add(chestOverlay);
+		navigationShown = false;
 		overlayManager.add(chestItemOverlay);
 		overlayManager.add(chestMarkerOverlay);
+		overlayManager.add(chestScrollOverlay);
 
 		wsClient.registerMessage(CoxStorageMessage.class);
 
@@ -220,11 +231,12 @@ public class CoxStoragePlannerPlugin extends Plugin implements CoxStoragePanel.A
 	protected void shutDown()
 	{
 		wsClient.unregisterMessage(CoxStorageMessage.class);
-		overlayManager.remove(chestOverlay);
 		overlayManager.remove(chestItemOverlay);
 		overlayManager.remove(chestMarkerOverlay);
+		overlayManager.remove(chestScrollOverlay);
 		storageUnits.clear();
 		clientToolbar.removeNavigation(navigationButton);
+		navigationShown = false;
 		panel = null;
 		navigationButton = null;
 
@@ -233,6 +245,8 @@ public class CoxStoragePlannerPlugin extends Plugin implements CoxStoragePanel.A
 		currentChest = null;
 		openChest = null;
 		itemNames.clear();
+		stackableNames.clear();
+		lineIcons.clear();
 		marking = false;
 		synchronized (lock)
 		{
@@ -630,7 +644,7 @@ public class CoxStoragePlannerPlugin extends Plugin implements CoxStoragePanel.A
 		}
 		WorldPoint here = player.getWorldLocation();
 		WorldPoint there = storage.getWorldLocation();
-		if (there.getPlane() != here.getPlane() || Math.floorDiv(there.getX(), 32) != Math.floorDiv(here.getX(), 32)
+		if (here == null || there == null || there.getPlane() != here.getPlane() || Math.floorDiv(there.getX(), 32) != Math.floorDiv(here.getX(), 32)
 			|| Math.floorDiv(there.getY(), 32) != Math.floorDiv(here.getY(), 32) || !isBuiltStorage(storage))
 		{
 			return null;
@@ -664,7 +678,7 @@ public class CoxStoragePlannerPlugin extends Plugin implements CoxStoragePanel.A
 		}
 		boolean opened = openedChests.contains(key);
 		Map<String, Integer> before = openedWithByChest.getOrDefault(key, items);
-		return new ChestProgress(plan, items, worn, before, opened ? privateTally() : null, config.chestPutBack());
+		return new ChestProgress(plan, items, worn, before, opened ? privateTally() : null, config.chestPutBack(), stackableNames);
 	}
 
 	/** The private storage's tracked contents by item name. */
@@ -947,7 +961,7 @@ public class CoxStoragePlannerPlugin extends Plugin implements CoxStoragePanel.A
 		}
 		ItemContainer storage = client.getItemContainer(openStorage == InterfaceID.RAIDS_STORAGE_SHARED
 			? InventoryID.RAIDS_SHAREDSTORAGE : InventoryID.RAIDS_PRIVATESTORAGE);
-		openChest = new ChestProgress(plan, items, worn, before, tally(storage), config.chestPutBack());
+		openChest = new ChestProgress(plan, items, worn, before, tally(storage), config.chestPutBack(), stackableNames);
 	}
 
 	/** Item name to quantity for a container, null for one the client hasn't seen. */
@@ -974,7 +988,16 @@ public class CoxStoragePlannerPlugin extends Plugin implements CoxStoragePanel.A
 		String name = itemNames.get(itemId);
 		if (name == null)
 		{
-			name = itemManager.getItemComposition(itemId).getName();
+			ItemComposition item = itemManager.getItemComposition(itemId);
+			name = item.getName();
+			if (name == null)
+			{
+				name = "";
+			}
+			if (item.isStackable())
+			{
+				stackableNames.add(name);
+			}
 			itemNames.put(itemId, name);
 		}
 		return name;
@@ -982,7 +1005,13 @@ public class CoxStoragePlannerPlugin extends Plugin implements CoxStoragePanel.A
 
 	ChestProgress getOpenChest()
 	{
-		return config.chestOverlay() || config.chestGlow() ? openChest : null;
+		return openChest;
+	}
+
+	/** The storage interface that is open (its group id), 0 for none. Client thread. */
+	int getOpenStorage()
+	{
+		return openStorage;
 	}
 
 	/** Whether the numbers should be the solo ones right now. */
@@ -1080,7 +1109,8 @@ public class CoxStoragePlannerPlugin extends Plugin implements CoxStoragePanel.A
 	private void sendToParty()
 	{
 		ticksSinceSend++;
-		if (!party.isInParty() || party.getLocalMember() == null)
+		// the party only hears about your supplies while you track them yourself
+		if (!config.suppliesTracker() || !party.isInParty() || party.getLocalMember() == null)
 		{
 			lastSent = null;
 			return;
@@ -1092,9 +1122,9 @@ public class CoxStoragePlannerPlugin extends Plugin implements CoxStoragePanel.A
 		CoxStorageMessage status;
 		synchronized (lock)
 		{
-			status = new CoxStorageMessage(inventory.toArray(),
-				privateStorage == null ? null : privateStorage.toArray(),
-				sharedStorage == null ? null : sharedStorage.toArray());
+			status = new CoxStorageMessage(inventory.toWire(),
+				privateStorage == null ? null : privateStorage.toWire(),
+				sharedStorage == null ? null : sharedStorage.toWire());
 		}
 		if (resendStatus || !status.sameContent(lastSent))
 		{
@@ -1160,6 +1190,11 @@ public class CoxStoragePlannerPlugin extends Plugin implements CoxStoragePanel.A
 	{
 		if (CoxStoragePlannerConfig.GROUP.equals(event.getGroup()))
 		{
+			if (CoxStoragePlannerConfig.KEY_ICONS.equals(event.getKey()))
+			{
+				// the plugin's own bookkeeping
+				return;
+			}
 			if (CoxStoragePlannerConfig.KEY_SEPARATE_SOLO_CHESTS.equals(event.getKey()) && separateChests()
 				&& chestsSolo.all().isEmpty() && !chests.all().isEmpty())
 			{
@@ -1173,18 +1208,6 @@ public class CoxStoragePlannerPlugin extends Plugin implements CoxStoragePanel.A
 	}
 
 	// ---- sidebar actions, on the Swing thread ----
-
-	@Override
-	public void renameChest(String key, String name)
-	{
-		ChestPlan plan = book().get(key);
-		if (plan != null && !plan.getName().equals(name.trim()))
-		{
-			plan.setName(name);
-			saveChests();
-			refresh();
-		}
-	}
 
 	@Override
 	public void setChestOrdered(String key, boolean ordered)
@@ -1281,27 +1304,6 @@ public class CoxStoragePlannerPlugin extends Plugin implements CoxStoragePanel.A
 	}
 
 	@Override
-	public void copyChestFromOther(String key)
-	{
-		ChestBook from = book() == chests ? chestsSolo : chests;
-		ChestPlan source = from.get(key);
-		ChestPlan plan = book().getOrCreate(key, chestName(key));
-		if (source == null || plan == null)
-		{
-			return;
-		}
-		plan.setName(source.getName());
-		plan.setOrdered(source.isOrdered());
-		plan.getDeposit().clear();
-		plan.getDeposit().addAll(source.getDeposit());
-		plan.getWithdraw().clear();
-		plan.getWithdraw().addAll(source.getWithdraw());
-		saveChests();
-		clientThread.invokeLater(this::updateOpenChest);
-		refresh();
-	}
-
-	@Override
 	public void deleteChest(String key)
 	{
 		if (book().remove(key))
@@ -1354,7 +1356,108 @@ public class CoxStoragePlannerPlugin extends Plugin implements CoxStoragePanel.A
 			return;
 		}
 		PanelState state = snapshot();
-		SwingUtilities.invokeLater(() -> target.update(state));
+		boolean show = !config.hideSidebar() && (state.inRaid || !config.hideOutsideRaid());
+		SwingUtilities.invokeLater(() ->
+		{
+			if (panel != target)
+			{
+				// shut down in between
+				return;
+			}
+			if (show != navigationShown)
+			{
+				navigationShown = show;
+				if (show)
+				{
+					clientToolbar.addNavigation(navigationButton);
+				}
+				else
+				{
+					clientToolbar.removeNavigation(navigationButton);
+				}
+			}
+			target.update(state);
+		});
+	}
+
+	private void loadLineIcons()
+	{
+		lineIcons.clear();
+		try
+		{
+			Map<String, Double> stored = gson.fromJson(config.lineIcons(), new com.google.gson.reflect.TypeToken<Map<String, Double>>()
+			{
+			}.getType());
+			if (stored != null)
+			{
+				for (Map.Entry<String, Double> e : stored.entrySet())
+				{
+					if (e.getKey() != null && e.getValue() != null && e.getValue() > 0)
+					{
+						lineIcons.put(e.getKey(), e.getValue().intValue());
+					}
+				}
+			}
+		}
+		catch (RuntimeException e)
+		{
+			// a broken config entry: the icons come back as the items are seen again
+		}
+	}
+
+	/**
+	 * Finds an item id for every line of the chest lists among the items seen so far, for the sidebar's
+	 * icons. A line that matches several takes the fullest dose. Kept in the config, since outside a
+	 * raid there's nothing to see them in.
+	 */
+	private void learnLineIcons(ChestBook book)
+	{
+		boolean changed = false;
+		for (ChestPlan plan : book.all())
+		{
+			List<String> lines = new ArrayList<>(plan.getDeposit());
+			lines.addAll(plan.getWithdraw());
+			for (ChestPlan.Line line : ChestPlan.parse(lines))
+			{
+				if (line.everything || line.everythingElse)
+				{
+					continue;
+				}
+				String key = iconKey(line);
+				Integer known = lineIcons.get(key);
+				String knownName = known == null ? null : itemNames.get(known);
+				if (known != null && (knownName == null || ChestProgress.dose(knownName) < 0 || ChestProgress.dose(knownName) >= 4))
+				{
+					continue;
+				}
+				int best = known == null ? -1 : known;
+				int bestDose = knownName == null ? -2 : ChestProgress.dose(knownName);
+				for (Map.Entry<Integer, String> e : itemNames.entrySet())
+				{
+					int dose = ChestProgress.dose(e.getValue());
+					if (line.matches(e.getValue()) && (dose > bestDose || (dose == bestDose && e.getKey() < best)))
+					{
+						best = e.getKey();
+						bestDose = dose;
+					}
+				}
+				if (best > 0 && (known == null || best != known))
+				{
+					lineIcons.put(key, best);
+					changed = true;
+				}
+			}
+		}
+		if (changed)
+		{
+			configManager.setConfiguration(CoxStoragePlannerConfig.GROUP, CoxStoragePlannerConfig.KEY_ICONS, gson.toJson(lineIcons));
+		}
+	}
+
+	/** What a line's icon is filed under: its item part in lower case, so "Xeric's aid, 2" and "wear Xeric's aid" share one. */
+	static String iconKey(ChestPlan.Line line)
+	{
+		return line.name.toLowerCase(Locale.ROOT);
 	}
 
 	private PanelState snapshot()
@@ -1365,19 +1468,21 @@ public class CoxStoragePlannerPlugin extends Plugin implements CoxStoragePanel.A
 		state.countSplit = config.countSplit();
 		state.units = config.needUnits();
 		state.chests = book().copy(gson);
+		learnLineIcons(state.chests);
+		state.lineIcons = new HashMap<>(lineIcons);
+		state.suppliesTracker = config.suppliesTracker();
 		state.currentChest = currentChest;
 		state.marking = marking;
 		state.putBack = config.chestPutBack();
 		state.openChest = openChest != null || currentChest == null ? openChest : progressFor(currentChest);
 		state.separateSoloNeeds = config.separateSoloNeeds();
 		state.separateSoloChests = separateChests();
-		state.trackStamina = config.trackStamina();
 		state.solo = solo();
 		state.inRaid = inRaid;
 		Needs needs = needsFor(state.solo);
 		for (Potion potion : Potion.values())
 		{
-			state.need.put(potion, state.applies(potion) ? needs.get(potion) : 0);
+			state.need.put(potion, potion.isSupply() ? needs.get(potion) : 0);
 		}
 
 		PartyMember local = party.getLocalMember();
