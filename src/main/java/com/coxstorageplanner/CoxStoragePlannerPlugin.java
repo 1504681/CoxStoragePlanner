@@ -21,6 +21,8 @@ import javax.inject.Inject;
 import lombok.extern.slf4j.Slf4j;
 import javax.swing.SwingUtilities;
 import net.runelite.api.Client;
+import net.runelite.api.GameObject;
+import net.runelite.api.GameState;
 import net.runelite.api.Item;
 import net.runelite.api.ItemContainer;
 import net.runelite.api.MenuAction;
@@ -29,6 +31,9 @@ import net.runelite.api.Player;
 import net.runelite.api.WorldView;
 import net.runelite.api.coords.LocalPoint;
 import net.runelite.api.coords.WorldPoint;
+import net.runelite.api.events.GameObjectDespawned;
+import net.runelite.api.events.GameObjectSpawned;
+import net.runelite.api.events.GameStateChanged;
 import net.runelite.api.events.GameTick;
 import net.runelite.api.events.ItemContainerChanged;
 import net.runelite.api.events.PostMenuSort;
@@ -36,6 +41,7 @@ import net.runelite.api.events.WidgetClosed;
 import net.runelite.api.events.WidgetLoaded;
 import net.runelite.api.gameval.InterfaceID;
 import net.runelite.api.gameval.InventoryID;
+import net.runelite.api.gameval.ObjectID;
 import net.runelite.api.gameval.VarbitID;
 import net.runelite.client.callback.ClientThread;
 import net.runelite.client.config.ConfigManager;
@@ -94,6 +100,8 @@ public class CoxStoragePlannerPlugin extends Plugin implements CoxStoragePanel.A
 
 	@Inject
 	private ChestOverlay chestOverlay;
+	@Inject
+	private ChestMarkerOverlay chestMarkerOverlay;
 
 	@Inject
 	private ChestItemOverlay chestItemOverlay;
@@ -120,6 +128,8 @@ public class CoxStoragePlannerPlugin extends Plugin implements CoxStoragePanel.A
 	/** Rooms seen this raid: room slot to chest key, to tell the two farming rooms apart. */
 	private final Map<String, String> roomKeys = new LinkedHashMap<>();
 	private String lastRoomSlot;
+	/** The storage units in the loaded scene, for the mark over the one in the current room. Client thread. */
+	private final List<GameObject> storageUnits = new ArrayList<>();
 	/** Template chunks inside the raid the room table didn't know, logged once each. */
 	private final Set<Integer> unknownChunks = new HashSet<>();
 	private final Map<Integer, String> itemNames = new HashMap<>();
@@ -192,6 +202,7 @@ public class CoxStoragePlannerPlugin extends Plugin implements CoxStoragePanel.A
 		clientToolbar.addNavigation(navigationButton);
 		overlayManager.add(chestOverlay);
 		overlayManager.add(chestItemOverlay);
+		overlayManager.add(chestMarkerOverlay);
 
 		wsClient.registerMessage(CoxStorageMessage.class);
 
@@ -206,6 +217,8 @@ public class CoxStoragePlannerPlugin extends Plugin implements CoxStoragePanel.A
 		wsClient.unregisterMessage(CoxStorageMessage.class);
 		overlayManager.remove(chestOverlay);
 		overlayManager.remove(chestItemOverlay);
+		overlayManager.remove(chestMarkerOverlay);
+		storageUnits.clear();
 		clientToolbar.removeNavigation(navigationButton);
 		panel = null;
 		navigationButton = null;
@@ -543,6 +556,80 @@ public class CoxStoragePlannerPlugin extends Plugin implements CoxStoragePanel.A
 	 * instance; walking within a room that straddles two squares keeps the same key. Ground the table
 	 * doesn't know counts as the room before it.
 	 */
+	private static boolean isStorageUnit(int id)
+	{
+		return id == ObjectID.RAIDS_STORAGE_1 || id == ObjectID.RAIDS_STORAGE_2 || id == ObjectID.RAIDS_STORAGE_3;
+	}
+
+	@Subscribe
+	public void onGameObjectSpawned(GameObjectSpawned event)
+	{
+		if (isStorageUnit(event.getGameObject().getId()))
+		{
+			storageUnits.add(event.getGameObject());
+		}
+	}
+
+	@Subscribe
+	public void onGameObjectDespawned(GameObjectDespawned event)
+	{
+		storageUnits.remove(event.getGameObject());
+	}
+
+	@Subscribe
+	public void onGameStateChanged(GameStateChanged event)
+	{
+		if (event.getGameState() == GameState.LOADING)
+		{
+			storageUnits.clear();
+		}
+	}
+
+	List<GameObject> getStorageUnits()
+	{
+		return storageUnits;
+	}
+
+	/**
+	 * Whether the chest for a storage unit is all done, null when it's not in the current room or
+	 * has no plan. The one in the room is the one in the same 32-tile square as the player, or the
+	 * open storage, whichever.
+	 */
+	Boolean chestDoneAt(GameObject storage)
+	{
+		Player player = client.getLocalPlayer();
+		String key = currentChest;
+		if (player == null || key == null)
+		{
+			return null;
+		}
+		WorldPoint here = player.getWorldLocation();
+		WorldPoint there = storage.getWorldLocation();
+		if (there.getPlane() != here.getPlane() || Math.floorDiv(there.getX(), 32) != Math.floorDiv(here.getX(), 32)
+			|| Math.floorDiv(there.getY(), 32) != Math.floorDiv(here.getY(), 32))
+		{
+			return null;
+		}
+		ChestProgress progress = openChest;
+		if (progress == null || !progress.plan.getKey().equals(key))
+		{
+			ChestPlan plan = book().get(key);
+			if (plan == null || (plan.getDeposit().isEmpty() && plan.getWithdraw().isEmpty()))
+			{
+				return null;
+			}
+			Map<String, Integer> items;
+			Map<String, Integer> worn;
+			synchronized (lock)
+			{
+				items = inventoryItems;
+				worn = wornItems;
+			}
+			progress = new ChestProgress(plan, items, worn, items, null, config.chestPutBack());
+		}
+		return progress.isDone();
+	}
+
 	private void trackRoom()
 	{
 		Player player = client.getLocalPlayer();

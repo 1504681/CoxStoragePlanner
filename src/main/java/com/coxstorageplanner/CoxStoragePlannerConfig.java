@@ -193,6 +193,18 @@ public interface CoxStoragePlannerConfig extends Config
 	}
 
 	@ConfigItem(
+		keyName = "chestMarkers",
+		name = "Mark the storage unit",
+		description = "A ? over the storage unit in your room while its chest has things to do, a green tick once it's all done",
+		section = chestSection,
+		position = 9
+	)
+	default boolean chestMarkers()
+	{
+		return true;
+	}
+
+	@ConfigItem(
 		keyName = KEY_SEPARATE_SOLO_CHESTS,
 		name = "Separate chests for solo raids",
 		description = "Keep a second set of chest plans for solo raids, picked by the raid's party size (the Team | Solo switch outside a raid). Starts as a copy of the team plans",

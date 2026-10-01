@@ -14,7 +14,7 @@ A chest works in three phases while its storage is open: gear to wear, then thin
 
 With *Separate chests for solo raids* on, solo raids get their own set of chest plans (it starts as a copy of the team ones): inside a raid the party size picks the set (click the **Team | Solo** switch to override it for that raid), outside it the switch does, and *Copy from Team* / *Copy from Solo* under the chest header brings the other set's plan for that chest over.
 
-Tick **Withdraw in this order** and the list becomes steps 1, 2, 3. While the storage is open the items still to move glow: in the side inventory what goes in, in the storage what comes out. Only as many light as are still to move, so `Xeric's aid, 2` with one already in the inventory lights one, not the whole row. Ordered lists light the next three items: the next one gets a big numbered orb over the item, the two after it small ones in the corner, fainter the further down the order they are; a setting switches that to only the next item, or to all of them in a gradient from the first colour to the last. Colours and the pulse are settings too, and there's an optional on-screen list of the steps.
+Tick **Withdraw in this order** and the list becomes steps 1, 2, 3. While the storage is open the items still to move glow: in the side inventory what goes in, in the storage what comes out. Only as many light as are still to move, so `Xeric's aid, 2` with one already in the inventory lights one, not the whole row. Ordered lists light the next three items: the next one gets a big numbered orb over the item, the two after it small ones in the corner, fainter the further down the order they are; a setting switches that to only the next item, or to all of them in a gradient from the first colour to the last. Colours and the pulse are settings too, and there's an optional on-screen list of the steps. The storage unit in the room you're in carries a `?` while its chest still has something to wear, put in or take out, and a green tick once the inventory says it's all done (setting).
 
 ## Supplies
 
@@ -36,6 +36,7 @@ The game only sends a storage's contents while its interface is open, so both st
 | Count shared storage | off |
 | Count split overloads | on |
 | Separate chests for solo raids | off |
+| Mark the storage unit | on |
 | Steps overlay | off |
 | Glow items | on |
 | Ordered withdraw glow | next three, biggest first |
