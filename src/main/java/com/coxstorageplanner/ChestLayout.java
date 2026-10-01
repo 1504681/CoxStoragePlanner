@@ -17,6 +17,8 @@ import java.util.Set;
  * what belongs there goes in, an item of the list in the wrong place included, and comes out again when
  * its slot is the first empty one. The end of the list may sit further down instead: carried in order
  * below where everything before it will land, it's left there, so a rune pouch kept in the last slot stays.
+ * Two neighbours of the list the wrong way round are as good as right: clicks 9 and 10 made as 10 and 9
+ * leave the two swapped, and nothing is asked back for that.
  *
  * <p>A storage has only so many slots and every item takes one (a stack takes one for the lot), so not
  * everything may fit at once. Then it goes in rounds: put in what fits, take out what the holes ask
@@ -91,6 +93,10 @@ final class ChestLayout
 	private final Set<String> stackable;
 	/** The inventory slots the plan may use, in order. */
 	private final int[] layout;
+	/** Per entry, the inventory slot it belongs in: its own, or its neighbour's when the two are swapped. */
+	private final int[] at;
+	/** Per position of {@link #layout} before {@link #head}, the entry that belongs there. */
+	private final int[] who;
 
 	/**
 	 * @param budgets per put-in line, how many more it takes: MAX_VALUE for all of them
@@ -157,7 +163,7 @@ final class ChestLayout
 		}
 
 		// the end of the list, as far back as it's carried in order with room above it for the rest
-		int[] at = new int[entries.size()];
+		at = new int[entries.size()];
 		boolean[] kept = new boolean[n];
 		int head = entries.size();
 		int below = layout.length;
@@ -182,9 +188,32 @@ final class ChestLayout
 			head = k;
 		}
 		this.head = head;
+		who = new int[head];
 		for (int k = 0; k < head; k++)
 		{
-			at[k] = layout[k];
+			who[k] = k;
+		}
+		// two neighbours the wrong way round: one of them sits in the other's slot, and neither slot holds its own
+		for (int k = 0; k + 1 < head; k++)
+		{
+			String here = names[layout[k]];
+			String next = names[layout[k + 1]];
+			Entry first = entries.get(k);
+			Entry second = entries.get(k + 1);
+			if ((here != null && first.line.matches(here)) || (next != null && second.line.matches(next)))
+			{
+				continue;
+			}
+			if ((here != null && second.line.matches(here)) || (next != null && first.line.matches(next)))
+			{
+				who[k] = k + 1;
+				who[k + 1] = k;
+				k++;
+			}
+		}
+		for (int p = 0; p < head; p++)
+		{
+			at[who[p]] = layout[p];
 		}
 
 		placed = new boolean[entries.size()];
@@ -210,7 +239,7 @@ final class ChestLayout
 		// where the list goes, anything that isn't what belongs there goes in
 		for (int k = 0; k < head; k++)
 		{
-			int s = layout[k];
+			int s = at[k];
 			if (names[s] != null && !placed[k])
 			{
 				int line = taker(putIn, left, takeOut, names[s]);
@@ -314,7 +343,7 @@ final class ChestLayout
 		List<int[]> rest = new ArrayList<>();
 		for (int k = 0; k < head; k++)
 		{
-			int to = layout[k];
+			int to = at[k];
 			if (placed[k])
 			{
 				continue;
@@ -330,7 +359,7 @@ final class ChestLayout
 				boolean both = false;
 				for (int j = 0; j < head && names[to] != null; j++)
 				{
-					both |= layout[j] == s && entries.get(j).line.matches(names[to]);
+					both |= at[j] == s && entries.get(j).line.matches(names[to]);
 				}
 				if (from < 0 || (both && !swap))
 				{
@@ -461,16 +490,17 @@ final class ChestLayout
 	private List<Integer> fill(String[] slots, Map<String, Integer> stored)
 	{
 		List<Integer> clicks = new ArrayList<>();
-		for (int k = 0; k < layout.length; k++)
+		for (int p = 0; p < layout.length; p++)
 		{
-			if (slots[layout[k]] != null)
+			if (slots[layout[p]] != null)
 			{
 				continue;
 			}
-			if (k >= head)
+			if (p >= head)
 			{
 				break;
 			}
+			int k = who[p];
 			Entry entry = entries.get(k);
 			// a stack carried elsewhere would swallow the withdrawal where it sits
 			if (entry.stack && holds(slots, entry.line))
@@ -494,7 +524,7 @@ final class ChestLayout
 					stored.remove(name);
 				}
 			}
-			slots[layout[k]] = name;
+			slots[layout[p]] = name;
 			clicks.add(k);
 		}
 		return clicks;

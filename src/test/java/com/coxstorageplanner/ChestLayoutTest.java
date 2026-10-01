@@ -258,12 +258,12 @@ public class ChestLayoutTest
 		assertNull(game.slots[4]);
 		assertEquals("Divine rune pouch (l)", game.slots[27]);
 
-		// carried above where the rest will land, it's in the way and goes back in
+		// carried above where the rest will land, it's in the way and goes back in; the scythe is one slot off, which is fine
 		game = new Game(plan, 25, Collections.emptySet(), "Divine rune pouch (l)", "Scythe of vitur").store("Elder maul", 1);
 		progress = game.progress();
-		assertEquals(Arrays.asList("Divine rune pouch (l)", "Scythe of vitur"), progress.outOfOrder);
+		assertEquals(Arrays.asList("Divine rune pouch (l)"), progress.outOfOrder);
 		assertTrue(game.play().isDone());
-		assertEquals(Arrays.asList("Scythe of vitur", "Elder maul", "Divine rune pouch (l)"), game.carried());
+		assertEquals(Arrays.asList("Elder maul", "Scythe of vitur", "Divine rune pouch (l)"), game.carried());
 	}
 
 	@Test
@@ -467,7 +467,7 @@ public class ChestLayoutTest
 	@Test
 	public void gearInTheWrongSlotIsDraggedWhenTheStorageIsTight()
 	{
-		// the bow is carried where the maul belongs and the maul where the claws do; one slot left in the storage
+		// the bow is carried two slots down from its own, with a shark in its place; one slot left in the storage
 		ChestPlan plan = plan("everything else", "Twisted bow", "Dragon claws", "Elder maul");
 		Game game = new Game(plan, 2, Collections.emptySet(), "Shark", "Elder maul", "Twisted bow").store("Dragon claws", 1);
 		ChestProgress progress = game.progress();
@@ -478,10 +478,50 @@ public class ChestLayoutTest
 		assertFalse(progress.depositsSlot(0, "Shark"));
 		assertFalse(progress.depositsSlot(1, "Elder maul"));
 		assertTrue(game.play().isDone());
-		assertEquals(Arrays.asList("Twisted bow", "Dragon claws", "Elder maul"), game.carried());
-		assertEquals(2, game.drags);
+		// the maul sits where the claws go, which is close enough: the claws take the slot after it
+		assertEquals(Arrays.asList("Twisted bow", "Elder maul", "Dragon claws"), game.carried());
+		assertEquals(1, game.drags);
 		assertEquals(1, game.deposits);
 		assertEquals(1, game.withdrawals);
+	}
+
+	@Test
+	public void neighboursTheWrongWayRoundAreFine()
+	{
+		ChestPlan plan = plan("everything else", "Gear a", "Gear b", "Gear c", "Gear d");
+		// carried with b and c swapped: nothing to do
+		Game game = new Game(plan, 25, Collections.emptySet(), "Gear a", "Gear c", "Gear b", "Gear d");
+		ChestProgress progress = game.progress();
+		assertTrue(progress.outOfOrder.isEmpty());
+		assertTrue(progress.isDone());
+
+		// b clicked before a: it lands in a's slot and stays, and a is next, then c
+		game = new Game(plan, 25, Collections.emptySet()).store("Gear a", 1).store("Gear b", 1).store("Gear c", 1).store("Gear d", 1);
+		game.withdraw("Gear b", 1);
+		progress = game.progress();
+		assertTrue(progress.outOfOrder.isEmpty());
+		assertEquals(ChestProgress.Phase.WITHDRAW, progress.phase());
+		assertEquals(1, progress.queue().get(0).number);
+		assertEquals(3, progress.queue().get(1).number);
+		assertTrue(game.play().isDone());
+		assertEquals(Arrays.asList("Gear b", "Gear a", "Gear c", "Gear d"), game.carried());
+		assertEquals(0, game.deposits);
+
+		// one slot further off is out of place: c in a's slot goes back in
+		game = new Game(plan, 25, Collections.emptySet(), "Gear c").store("Gear a", 1).store("Gear b", 1).store("Gear d", 1);
+		progress = game.progress();
+		assertEquals(Arrays.asList("Gear c"), progress.outOfOrder);
+		assertTrue(game.play().isDone());
+		assertEquals(Arrays.asList("Gear a", "Gear b", "Gear c", "Gear d"), game.carried());
+
+		// a thing in the way next to it doesn't spoil it: a carried in b's slot stays, and b comes out into a's
+		game = new Game(plan, 25, Collections.emptySet(), "Shark", "Gear a").store("Gear b", 1).store("Gear c", 1).store("Gear d", 1);
+		progress = game.progress();
+		assertTrue(progress.outOfOrder.isEmpty());
+		assertTrue(progress.depositsSlot(0, "Shark"));
+		assertTrue(game.play().isDone());
+		assertEquals(Arrays.asList("Gear b", "Gear a", "Gear c", "Gear d"), game.carried());
+		assertEquals(1, game.deposits);
 	}
 
 	@Test
@@ -654,14 +694,14 @@ public class ChestLayoutTest
 	public void whatNeitherListTouchesKeepsItsSlot()
 	{
 		// no put-in list: the rune pouch stays where it is and the list fills in around it
-		ChestPlan plan = plan(null, "Twisted bow", "Dragon claws");
-		Game game = new Game(plan, 25, Collections.emptySet(), "Rune pouch", "Dragon claws").store("Twisted bow", 1);
+		ChestPlan plan = plan(null, "Twisted bow", "Dragon claws", "Elder maul");
+		Game game = new Game(plan, 25, Collections.emptySet(), "Rune pouch", "Elder maul").store("Twisted bow", 1).store("Dragon claws", 1);
 		ChestProgress progress = game.progress();
 		assertFalse(progress.depositsSlot(0, "Rune pouch"));
-		assertTrue(progress.depositsSlot(1, "Dragon claws"));
-		assertEquals(Arrays.asList("Dragon claws"), progress.outOfOrder);
+		assertTrue(progress.depositsSlot(1, "Elder maul"));
+		assertEquals(Arrays.asList("Elder maul"), progress.outOfOrder);
 		assertTrue(game.play().isDone());
-		assertEquals(Arrays.asList("Rune pouch", "Twisted bow", "Dragon claws"), game.carried());
+		assertEquals(Arrays.asList("Rune pouch", "Twisted bow", "Dragon claws", "Elder maul"), game.carried());
 	}
 
 	@Test
