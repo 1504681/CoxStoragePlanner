@@ -4,7 +4,7 @@ package com.coxstorageplanner;
 public enum ChestGlow
 {
 	NEXT_ONLY("Only the next one", 1),
-	NEXT_THREE("Next three, biggest first", 3),
+	NEXT_FOUR("Next four, biggest first", 4),
 	GRADIENT("All, first to last", Integer.MAX_VALUE);
 
 	private final String displayName;

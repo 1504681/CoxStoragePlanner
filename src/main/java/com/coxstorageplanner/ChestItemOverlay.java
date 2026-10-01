@@ -20,8 +20,8 @@ import net.runelite.client.ui.overlay.WidgetItemOverlay;
 /**
  * Outlines the items a chest plan still wants moved: in the side inventory what goes in,
  * in the storage what comes out, and gear to put on in its own colour before either. The next one
- * of an ordered plan pulses; with the next three lit, each carries a numbered orb that shrinks the
- * further down the order it is.
+ * of an ordered plan pulses; with the next four lit, each carries a numbered orb that shrinks the
+ * further down the order it is. A step that wants more than one shows "x5" in the slot's top right corner.
  */
 class ChestItemOverlay extends WidgetItemOverlay
 {
@@ -38,8 +38,10 @@ class ChestItemOverlay extends WidgetItemOverlay
 		showOnInterfaces(InterfaceID.RAIDS_STORAGE_PRIVATE, InterfaceID.RAIDS_STORAGE_SHARED, InterfaceID.RAIDS_STORAGE_SIDE);
 	}
 
-	/** Orb diameters for the next withdrawal, the one after and the one after that. The next one covers the item. */
-	private static final int[] ORB_SIZES = {28, 15, 10};
+	/** Orb diameters for the next withdrawal and the three after it. The next one covers the item. */
+	private static final int[] ORB_SIZES = {28, 16, 12, 10};
+	/** How much the colour fades for each of those. */
+	private static final float[] ORB_FADE = {1f, 0.65f, 0.5f, 0.4f};
 
 	/** How much of each step has lit up so far this frame, so "Xeric's aid, 2" lights two and not the whole row. */
 	private final Map<ChestProgress.Step, Integer> lit = new IdentityHashMap<>();
@@ -51,7 +53,7 @@ class ChestItemOverlay extends WidgetItemOverlay
 		return super.render(graphics);
 	}
 
-	/** Whether this item is within the step's remaining count, counting it once it is. */
+	/** Whether this item is beyond the step's remaining count; counts it otherwise. */
 	private boolean enough(ChestProgress.Step step, WidgetItem widgetItem)
 	{
 		int already = lit.getOrDefault(step, 0);
@@ -61,6 +63,12 @@ class ChestItemOverlay extends WidgetItemOverlay
 		}
 		lit.put(step, already + Math.max(1, widgetItem.getQuantity()));
 		return false;
+	}
+
+	/** Whether this is the first item lit for the step, which is the one that carries its "xN". */
+	private boolean firstLit(ChestProgress.Step step, WidgetItem widgetItem)
+	{
+		return lit.getOrDefault(step, 0) == Math.max(1, widgetItem.getQuantity());
 	}
 
 	@Override
@@ -81,6 +89,7 @@ class ChestItemOverlay extends WidgetItemOverlay
 		int order = 0;
 		int orb = 0;
 		boolean pulse;
+		ChestProgress.Step step;
 		ChestProgress.Step wear = progress.wearStep(name);
 		if (wear != null)
 		{
@@ -89,12 +98,13 @@ class ChestItemOverlay extends WidgetItemOverlay
 			{
 				return;
 			}
+			step = wear;
 			color = config.chestWearColor();
 			pulse = true;
 		}
 		else if (group == InterfaceID.RAIDS_STORAGE_SIDE)
 		{
-			ChestProgress.Step step = progress.depositStep(name);
+			step = progress.depositStep(name);
 			if (step == null ? !progress.highlightsDeposit(name) : enough(step, widgetItem))
 			{
 				return;
@@ -105,7 +115,7 @@ class ChestItemOverlay extends WidgetItemOverlay
 		else
 		{
 			ChestGlow mode = config.chestOrderedGlow();
-			ChestProgress.Step step = progress.highlightsWithdraw(name, mode.getSteps());
+			step = progress.highlightsWithdraw(name, mode.getSteps());
 			if (step == null || enough(step, widgetItem))
 			{
 				return;
@@ -118,10 +128,10 @@ class ChestItemOverlay extends WidgetItemOverlay
 				order = step.order;
 				switch (mode)
 				{
-					case NEXT_THREE:
+					case NEXT_FOUR:
 						// the next one is big and bright, the ones behind it smaller and fainter
 						orb = ORB_SIZES[Math.min(rank, ORB_SIZES.length - 1)];
-						color = fade(color, rank == 0 ? 1f : rank == 1 ? 0.6f : 0.4f);
+						color = fade(color, ORB_FADE[Math.min(rank, ORB_FADE.length - 1)]);
 						break;
 					case GRADIENT:
 						orb = ORB_SIZES[1];
@@ -149,6 +159,30 @@ class ChestItemOverlay extends WidgetItemOverlay
 		{
 			drawOrb(graphics, bounds, orb, color, order);
 		}
+		if (step != null && step.remaining > 1 && step.remaining != Integer.MAX_VALUE && firstLit(step, widgetItem))
+		{
+			drawCount(graphics, bounds, step.remaining, color);
+		}
+	}
+
+	/** "x5" in the slot's top right corner, small, outlined so it reads over the orb's edge. */
+	private static void drawCount(Graphics2D graphics, Rectangle bounds, int count, Color color)
+	{
+		graphics.setFont(FontManager.getRunescapeSmallFont());
+		String text = "x" + count;
+		FontMetrics metrics = graphics.getFontMetrics();
+		int tx = bounds.x + bounds.width - metrics.stringWidth(text);
+		int ty = bounds.y + metrics.getAscent() - 2;
+		graphics.setColor(Color.BLACK);
+		for (int dx = -1; dx <= 1; dx++)
+		{
+			for (int dy = -1; dy <= 1; dy++)
+			{
+				graphics.drawString(text, tx + dx, ty + dy);
+			}
+		}
+		graphics.setColor(Color.WHITE);
+		graphics.drawString(text, tx, ty);
 	}
 
 	/**

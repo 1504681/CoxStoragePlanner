@@ -120,13 +120,13 @@ public interface CoxStoragePlannerConfig extends Config
 	@ConfigItem(
 		keyName = "chestOrderedGlow",
 		name = "Ordered withdraw glow",
-		description = "With an ordered withdraw list: glow just the next item, the next three with the biggest orb on the next one, or all of them from the first colour to the last",
+		description = "With an ordered withdraw list: glow just the next item, the next four with the biggest orb on the next one, or all of them from the first colour to the last",
 		section = chestSection,
 		position = 2
 	)
 	default ChestGlow chestOrderedGlow()
 	{
-		return ChestGlow.NEXT_THREE;
+		return ChestGlow.NEXT_FOUR;
 	}
 
 	@ConfigItem(
