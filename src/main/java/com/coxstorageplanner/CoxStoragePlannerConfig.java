@@ -93,7 +93,7 @@ public interface CoxStoragePlannerConfig extends Config
 	@ConfigItem(
 		keyName = "chestPutBack",
 		name = "Put back what's out of order",
-		description = "With an ordered withdrawal, ask to put back anything you carry that belongs to a later step, so it can come out in its place",
+		description = "With an ordered withdrawal, ask to put back anything you carry in the wrong inventory slot, so it comes out in its place and the inventory ends up in the order of the list",
 		section = chestSection,
 		position = 4
 	)

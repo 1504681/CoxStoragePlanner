@@ -45,6 +45,7 @@ import net.runelite.api.gameval.InterfaceID;
 import net.runelite.api.gameval.InventoryID;
 import net.runelite.api.gameval.ObjectID;
 import net.runelite.api.gameval.VarbitID;
+import net.runelite.api.widgets.Widget;
 import net.runelite.client.callback.ClientThread;
 import net.runelite.client.config.ConfigManager;
 import net.runelite.client.eventbus.Subscribe;
@@ -62,6 +63,7 @@ import net.runelite.client.plugins.PluginDescriptor;
 import net.runelite.client.ui.ClientToolbar;
 import net.runelite.client.ui.NavigationButton;
 import net.runelite.client.ui.overlay.OverlayManager;
+import net.runelite.client.util.Text;
 
 @Slf4j
 @PluginDescriptor(
@@ -72,12 +74,13 @@ import net.runelite.client.ui.overlay.OverlayManager;
 public class CoxStoragePlannerPlugin extends Plugin implements CoxStoragePanel.Actions
 {
 	// keep in sync with build.gradle
-	public static final String VERSION = "1.1.0";
+	public static final String VERSION = "1.2.0";
 
 	/** Ticks outside before a raid counts as left, so a relog or a reload doesn't wipe the raid's state. */
 	private static final int LEAVE_TICKS = 5;
 	/** Least ticks between two messages to the party. */
 	private static final int SEND_INTERVAL = 5;
+	private static final int INVENTORY_SLOTS = 28;
 
 	@Inject
 	private Client client;
@@ -160,6 +163,8 @@ public class CoxStoragePlannerPlugin extends Plugin implements CoxStoragePanel.A
 	/** Item name to quantity in the inventory. */
 	private Map<String, Integer> inventoryItems = Collections.emptyMap();
 	private Map<String, Integer> wornItems = Collections.emptyMap();
+	/** The inventory slot by slot, for plans held to the slot. */
+	private ChestProgress.Carried inventorySlots = new ChestProgress.Carried(Collections.emptyList());
 	/** The inventory when the storage was opened, so a "put in, N" line knows how many went in. */
 	private Map<String, Integer> openedWith = Collections.emptyMap();
 	/** The inventory when each chest's storage was last opened this raid, so its state can be judged after it closes. */
@@ -174,6 +179,14 @@ public class CoxStoragePlannerPlugin extends Plugin implements CoxStoragePanel.A
 	private final Map<Integer, Integer> lastInventory = new HashMap<>();
 	/** The storage interface that is open (its group id), 0 for none. */
 	private int openStorage;
+	/** Whether the open storage is in a round of withdrawals: it was too full to take more, so things come out first. */
+	private boolean withdrawing;
+	/** Free slots of the open storage as last worked out, to notice when the interface fills its numbers in. */
+	private int lastFree = -1;
+	/** Progress of the chest in the room while its storage is shut, worked out once a tick. */
+	private ChestProgress shutChest;
+	private String shutChestKey;
+	private int shutChestTick = -1;
 	/** The storage interface that just closed, and the last tick a deposit still counts for it. */
 	private int closedStorage;
 	private int closedStorageUntil;
@@ -259,6 +272,9 @@ public class CoxStoragePlannerPlugin extends Plugin implements CoxStoragePanel.A
 		privateItems.clear();
 		lastInventory.clear();
 		openStorage = 0;
+		withdrawing = false;
+		shutChest = null;
+		shutChestKey = null;
 		inRaid = false;
 		lastSent = null;
 	}
@@ -330,6 +346,7 @@ public class CoxStoragePlannerPlugin extends Plugin implements CoxStoragePanel.A
 		if (event.getGroupId() == InterfaceID.RAIDS_STORAGE_PRIVATE || event.getGroupId() == InterfaceID.RAIDS_STORAGE_SHARED)
 		{
 			openStorage = event.getGroupId();
+			withdrawing = false;
 			synchronized (lock)
 			{
 				openedWith = inventoryItems;
@@ -567,6 +584,12 @@ public class CoxStoragePlannerPlugin extends Plugin implements CoxStoragePanel.A
 			recompute();
 			changed = true;
 		}
+		else if (openStorage != 0 && storageFree() != lastFree)
+		{
+			// the interface wrote its slot count after the storage's contents came in
+			updateOpenChest();
+			changed = true;
+		}
 		if (changed)
 		{
 			refresh();
@@ -584,29 +607,123 @@ public class CoxStoragePlannerPlugin extends Plugin implements CoxStoragePanel.A
 	 */
 	private static boolean isStorageUnit(int id)
 	{
-		return id == ObjectID.RAIDS_STORAGE_1 || id == ObjectID.RAIDS_STORAGE_2 || id == ObjectID.RAIDS_STORAGE_3;
+		return privateSlots(id) > 0;
+	}
+
+	/**
+	 * Private slots of a storage unit by its object, 0 for anything else. Every room starts with the
+	 * tiny one (the API still calls it the hotspot); building over it gives small to massive.
+	 */
+	static int privateSlots(int id)
+	{
+		switch (id)
+		{
+			case ObjectID.RAIDS_STORAGE_HOTSPOT:
+				return 25;
+			case ObjectID.RAIDS_STORAGE_1:
+				return 30;
+			case ObjectID.RAIDS_STORAGE_2:
+				return 60;
+			case ObjectID.RAIDS_STORAGE_3:
+				return 90;
+			case ObjectID.RAIDS_STORAGE_4:
+				return 120;
+			default:
+				return 0;
+		}
 	}
 
 	@Subscribe
 	public void onGameObjectSpawned(GameObjectSpawned event)
 	{
-		int id = event.getGameObject().getId();
-		// a storage unit is built on a hotspot, which a varbit turns into the small, medium or large one
-		if (isStorageUnit(id) || id == ObjectID.RAIDS_STORAGE_HOTSPOT)
+		if (isStorageUnit(event.getGameObject().getId()))
 		{
 			storageUnits.add(event.getGameObject());
 		}
 	}
 
-	/** Whether an object is a built storage unit right now, looking through a hotspot to what it shows. */
-	private boolean isBuiltStorage(GameObject object)
+	/** The storage unit an object shows right now: what a varbit turned it into, or itself. */
+	private int storageId(GameObject object)
 	{
 		ObjectComposition def = client.getObjectDefinition(object.getId());
 		if (def != null && def.getImpostorIds() != null)
 		{
-			def = def.getImpostor();
+			ObjectComposition shown = def.getImpostor();
+			if (shown != null && isStorageUnit(shown.getId()))
+			{
+				return shown.getId();
+			}
 		}
-		return def != null && isStorageUnit(def.getId());
+		return object.getId();
+	}
+
+	/** Private slots of the storage unit nearest the player, 0 when there's none in sight. */
+	private int nearestStorageSlots()
+	{
+		Player player = client.getLocalPlayer();
+		WorldPoint here = player == null ? null : player.getWorldLocation();
+		GameObject nearest = null;
+		int best = Integer.MAX_VALUE;
+		for (GameObject storage : storageUnits)
+		{
+			WorldPoint there = storage.getWorldLocation();
+			if (here == null || there == null || there.getPlane() != here.getPlane())
+			{
+				continue;
+			}
+			int distance = there.distanceTo2D(here);
+			if (distance < best)
+			{
+				best = distance;
+				nearest = storage;
+			}
+		}
+		return nearest == null ? 0 : privateSlots(storageId(nearest));
+	}
+
+	private static final java.util.regex.Pattern NUMBER = java.util.regex.Pattern.compile("\\d+");
+
+	/**
+	 * Free slots of the open private storage, -1 when that can't be told (and for the shared one, which
+	 * the plans don't crowd). The size is the interface's own number when it's one of the five sizes,
+	 * else the size of the unit the player stands at.
+	 */
+	private int storageFree()
+	{
+		if (openStorage != InterfaceID.RAIDS_STORAGE_PRIVATE)
+		{
+			return -1;
+		}
+		ItemContainer storage = client.getItemContainer(InventoryID.RAIDS_PRIVATESTORAGE);
+		if (storage == null)
+		{
+			return -1;
+		}
+		int used = 0;
+		for (Item item : storage.getItems())
+		{
+			if (item.getId() > 0)
+			{
+				used++;
+			}
+		}
+		int written = 0;
+		Widget capacity = client.getWidget(InterfaceID.RaidsStoragePrivate.CAPACITY);
+		if (capacity != null && capacity.getText() != null)
+		{
+			java.util.regex.Matcher m = NUMBER.matcher(Text.removeTags(capacity.getText()));
+			while (m.find() && m.group().length() < 5)
+			{
+				written = Integer.parseInt(m.group());
+			}
+		}
+		int slots = written == 25 || written == 30 || written == 60 || written == 90 || written == 120 ? written : nearestStorageSlots();
+		if (slots <= 0 && written > used)
+		{
+			slots = written;
+		}
+		// more in it than it's supposed to hold: the size is wrong, so don't go by it
+		return slots <= 0 || used > slots ? -1 : slots - used;
 	}
 
 	@Subscribe
@@ -645,11 +762,11 @@ public class CoxStoragePlannerPlugin extends Plugin implements CoxStoragePanel.A
 		WorldPoint here = player.getWorldLocation();
 		WorldPoint there = storage.getWorldLocation();
 		if (here == null || there == null || there.getPlane() != here.getPlane() || Math.floorDiv(there.getX(), 32) != Math.floorDiv(here.getX(), 32)
-			|| Math.floorDiv(there.getY(), 32) != Math.floorDiv(here.getY(), 32) || !isBuiltStorage(storage))
+			|| Math.floorDiv(there.getY(), 32) != Math.floorDiv(here.getY(), 32))
 		{
 			return null;
 		}
-		ChestProgress progress = progressFor(key);
+		ChestProgress progress = shutProgress(key);
 		return progress == null ? null : progress.isDone();
 	}
 
@@ -671,14 +788,29 @@ public class CoxStoragePlannerPlugin extends Plugin implements CoxStoragePanel.A
 		}
 		Map<String, Integer> items;
 		Map<String, Integer> worn;
+		ChestProgress.Carried slots;
 		synchronized (lock)
 		{
 			items = inventoryItems;
 			worn = wornItems;
+			slots = inventorySlots;
 		}
 		boolean opened = openedChests.contains(key);
 		Map<String, Integer> before = openedWithByChest.getOrDefault(key, items);
-		return new ChestProgress(plan, items, worn, before, opened ? privateTally() : null, config.chestPutBack(), stackableNames);
+		return new ChestProgress(plan, items, worn, before, opened ? privateTally() : null, config.chestPutBack(), stackableNames, slots);
+	}
+
+	/** {@link #progressFor} for the mark over the storage unit, which asks every frame: worked out once a tick. Client thread. */
+	private ChestProgress shutProgress(String key)
+	{
+		int tick = client.getTickCount();
+		if (tick != shutChestTick || !key.equals(shutChestKey))
+		{
+			shutChest = progressFor(key);
+			shutChestKey = key;
+			shutChestTick = tick;
+		}
+		return shutChest;
 	}
 
 	/** The private storage's tracked contents by item name. */
@@ -953,15 +1085,21 @@ public class CoxStoragePlannerPlugin extends Plugin implements CoxStoragePanel.A
 		Map<String, Integer> items;
 		Map<String, Integer> worn;
 		Map<String, Integer> before;
+		ChestProgress.Carried slots;
 		synchronized (lock)
 		{
 			items = inventoryItems;
 			worn = wornItems;
 			before = openedWith;
+			slots = inventorySlots;
 		}
 		ItemContainer storage = client.getItemContainer(openStorage == InterfaceID.RAIDS_STORAGE_SHARED
 			? InventoryID.RAIDS_SHAREDSTORAGE : InventoryID.RAIDS_PRIVATESTORAGE);
-		openChest = new ChestProgress(plan, items, worn, before, tally(storage), config.chestPutBack(), stackableNames);
+		lastFree = storageFree();
+		ChestProgress progress = new ChestProgress(plan, items, worn, before, tally(storage), config.chestPutBack(), stackableNames,
+			slots.with(lastFree, withdrawing));
+		withdrawing = progress.withdrawing;
+		openChest = progress;
 	}
 
 	/** Item name to quantity for a container, null for one the client hasn't seen. */
@@ -1089,11 +1227,23 @@ public class CoxStoragePlannerPlugin extends Plugin implements CoxStoragePanel.A
 		{
 			worn = Collections.emptyMap();
 		}
+		Item[] slots = carried == null ? new Item[0] : carried.getItems();
+		String[] names = new String[Math.max(INVENTORY_SLOTS, slots.length)];
+		int[] quantities = new int[names.length];
+		for (int i = 0; i < slots.length; i++)
+		{
+			if (slots[i].getId() > 0 && slots[i].getQuantity() > 0)
+			{
+				names[i] = itemName(slots[i].getId());
+				quantities[i] = slots[i].getQuantity();
+			}
+		}
 		synchronized (lock)
 		{
 			inventory = carriedSupplies;
 			inventoryItems = items;
 			wornItems = worn;
+			inventorySlots = new ChestProgress.Carried(names, quantities, -1, false);
 		}
 		updateOpenChest();
 	}

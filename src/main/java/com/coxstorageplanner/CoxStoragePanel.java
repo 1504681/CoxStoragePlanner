@@ -582,6 +582,15 @@ class CoxStoragePanel extends PluginPanel
 				? state.openChest
 				: new ChestProgress(plan, state.carriedItems, state.wornItems, state.carriedItems, null, state.putBack);
 			ChestProgress.Step next = progress.next();
+			if (progress.blocked)
+			{
+				chestSteps.addRow(stepRow("Storage full, nothing to take out: make room", BAD), 0);
+			}
+			else if (progress.free >= 0)
+			{
+				chestSteps.addRow(stepRow("Storage: " + progress.free + (progress.free == 1 ? " slot free" : " slots free"),
+					progress.free == 0 ? WARN : MUTED), 0);
+			}
 			for (ChestProgress.Step step : progress.wears)
 			{
 				chestSteps.addRow(stepRow((step.done ? "✓ " : "• ") + "wear: " + step.line.name, step.done ? GOOD : WEAR), 0);
@@ -592,7 +601,7 @@ class CoxStoragePanel extends PluginPanel
 			}
 			for (String name : progress.outOfOrder)
 			{
-				chestSteps.addRow(stepRow("• back in: " + name + " (comes later)", WARN), 0);
+				chestSteps.addRow(stepRow("• back in: " + name + (progress.exact() ? " (wrong slot)" : " (comes later)"), WARN), 0);
 			}
 			for (ChestProgress.Step step : progress.withdrawals)
 			{

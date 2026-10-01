@@ -8,7 +8,11 @@ Each storage unit in the raid gets its own plan: what to put in and what to take
 
 The easy way to fill the lists is to click: tick **Mark by clicking** and, with a storage open, left-clicking an item in the storage adds it to Take out and one in the side inventory to Put in (with no storage open, inventory items go to the chest picked in the sidebar). Every click adds one more, so three clicks on a stinkhorn make `Stinkhorn mushroom, 3`, and the order you click is the withdraw order. `Unmark` on the right-click menu takes one away. Marking is off again when you leave the raid.
 
-A chest works in three phases while its storage is open: gear to wear, then things to put in, then things to take out. A Take out line starting with `wear` (`wear Scythe of vitur`) is gear to put on; it glows purple wherever it is, storage or inventory, until it's worn, and nothing else lights up until all of it is. Then the Put in items glow; `everything else` in Put in means whatever the Take out list doesn't keep. Once the inventory is clear the Take out list lights, in order. With *Put back what's out of order* on (default), anything you carry that belongs to a later step of an ordered list is asked back into the storage first, so it can come out in its place and the layout ends up right. Gear you put on stays ticked off, and the same item on a later line means one more of it.
+A chest works in three phases while its storage is open: gear to wear, then things to put in, then things to take out. A Take out line starting with `wear` (`wear Scythe of vitur`) is gear to put on; it glows purple wherever it is, storage or inventory, until it's worn, and nothing else lights up until all of it is. Then the Put in items glow; `everything else` in Put in means whatever the Take out list doesn't keep. Once the inventory is clear the Take out list lights, in order. Gear you put on stays ticked off, and the same item on a later line means one more of it.
+
+With *Put back what's out of order* on (default), an ordered list is an inventory layout: click 1 belongs in the first slot the plan may use, click 2 in the next (slots holding something neither list mentions are left alone and skipped). Anything in one of those slots that isn't what belongs there glows to go in, an item of the list in the wrong slot included (`back in: Elder maul (wrong slot)` in the sidebar), and comes out again when its turn comes; what already sits in its slot stays.
+
+A private storage holds 25 items (tiny) to 120 (massive), and an item it already has takes no new slot. When not everything fits, the plugin goes in rounds: it lights only the deposits there's room for, then the withdrawals those holes ask for, then the next deposits. With one free slot that's a swap at a time, and it picks the deposit that lets something out first. The sidebar shows the free slots while the storage is open; if it's full and nothing can come out, it says so (drop something or use the shared storage). Two carried items that need each other's slot need two free slots.
 
 **Copy my loadout** next to Take out sets all of that up from what you're wearing and carrying right now: worn gear as `wear` lines, then the inventory slot by slot (a run of the same item becomes one line with its number, `Xeric's aid, 3`), *Ordered withdrawal* ticked, and `everything else` in Put in if it was empty. Set the chest before Olm up that way once, with the inventory laid out how you want it, and the plugin walks you through it every raid: put the gear on, dump what's left, pull the rest in order, same layout.
 
@@ -56,6 +60,11 @@ The game only sends a storage's contents while its interface is open, so both st
 | Count split overloads | on |
 
 ## Changelog
+
+1.2.0
+- Ordered withdrawals are held to the inventory slot: items of the list carried in the wrong slot go back in and come out in place.
+- A storage too full for everything is worked in rounds: put in what fits, take out, put in the rest. Free slots show in the sidebar.
+- The `?` / tick is back over the tiny (default) storage unit, and shows over the massive one.
 
 1.1.0
 - Every click of an ordered withdrawal has its own number: two of five brews light as 17 and 18. Items that aren't anywhere take no number.
