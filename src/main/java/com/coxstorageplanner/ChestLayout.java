@@ -15,7 +15,8 @@ import java.util.Set;
  * finished inventory is the list, one slot per click, laid over the slots the plan may use: every slot
  * but the ones holding something neither list touches. Whatever sits in one of those slots and isn't
  * what belongs there goes in, an item of the list in the wrong place included, and comes out again when
- * its slot is the first empty one.
+ * its slot is the first empty one. The end of the list may sit further down instead: carried in order
+ * below where everything before it will land, it's left there, so a rune pouch kept in the last slot stays.
  *
  * <p>A storage has only so many slots (an item it already holds takes no new one), so not everything
  * may fit at once. Then it goes in rounds: put in what fits, take out what the holes ask for, put in
@@ -49,8 +50,13 @@ final class ChestLayout
 		}
 	}
 
-	/** The finished inventory: entry k belongs in the k-th slot the plan may use. Only what's on you or in the storage. */
+	/** The finished inventory, in order. Only what's on you or in the storage. */
 	final List<Entry> entries = new ArrayList<>();
+	/**
+	 * Entries before this one belong in the first slots the plan may use, entry k in the k-th. The ones
+	 * from here on are carried further down already, in order, and stay where they are.
+	 */
+	final int head;
 	/** Per entry, whether its slot holds it already. */
 	final boolean[] placed;
 	/** Per entry, how many a stack that's in its slot still lacks. */
@@ -136,12 +142,43 @@ final class ChestLayout
 			}
 		}
 
+		// the end of the list, as far back as it's carried in order with room above it for the rest
+		int[] at = new int[entries.size()];
+		boolean[] kept = new boolean[n];
+		int head = entries.size();
+		int below = layout.length;
+		for (int k = entries.size() - 1; k >= 0; k--)
+		{
+			int found = -1;
+			for (int p = below - 1; p >= k && found < 0; p--)
+			{
+				String name = names[layout[p]];
+				if (name != null && entries.get(k).line.matches(name))
+				{
+					found = p;
+				}
+			}
+			if (found < 0)
+			{
+				break;
+			}
+			at[k] = layout[found];
+			kept[layout[found]] = true;
+			below = found;
+			head = k;
+		}
+		this.head = head;
+		for (int k = 0; k < head; k++)
+		{
+			at[k] = layout[k];
+		}
+
 		placed = new boolean[entries.size()];
 		shortBy = new int[entries.size()];
 		for (int k = 0; k < entries.size(); k++)
 		{
 			Entry entry = entries.get(k);
-			int s = layout[k];
+			int s = at[k];
 			if (names[s] != null && entry.line.matches(names[s]))
 			{
 				placed[k] = true;
@@ -157,7 +194,7 @@ final class ChestLayout
 		Arrays.fill(via, STAYS);
 		int[] left = budgets.clone();
 		// where the list goes, anything that isn't what belongs there goes in
-		for (int k = 0; k < entries.size(); k++)
+		for (int k = 0; k < head; k++)
 		{
 			int s = layout[k];
 			if (names[s] != null && !placed[k])
@@ -168,10 +205,10 @@ final class ChestLayout
 			}
 		}
 		// past it, only what the put-in list takes
-		for (int k = entries.size(); k < layout.length; k++)
+		for (int k = head; k < layout.length; k++)
 		{
 			int s = layout[k];
-			int line = names[s] == null ? -1 : taker(putIn, left, takeOut, names[s]);
+			int line = names[s] == null || kept[s] ? -1 : taker(putIn, left, takeOut, names[s]);
 			if (line >= 0)
 			{
 				via[s] = line;
@@ -195,10 +232,10 @@ final class ChestLayout
 				{
 					continue;
 				}
-				for (int j = entries.size(); j < layout.length; j++)
+				for (int j = head; j < layout.length; j++)
 				{
 					int s = layout[j];
-					if (names[s] != null && via[s] == STAYS && entries.get(k).line.matches(names[s]))
+					if (names[s] != null && !kept[s] && via[s] == STAYS && entries.get(k).line.matches(names[s]))
 					{
 						via[s] = MISPLACED;
 						break;
@@ -321,7 +358,7 @@ final class ChestLayout
 			{
 				continue;
 			}
-			if (k >= entries.size())
+			if (k >= head)
 			{
 				break;
 			}

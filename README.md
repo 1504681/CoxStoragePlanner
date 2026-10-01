@@ -10,7 +10,7 @@ The easy way to fill the lists is to click: tick **Mark by clicking** and, with 
 
 A chest works in three phases while its storage is open: gear to wear, then things to deposit, then things to withdraw. A Withdraw line starting with `wear` (`wear Scythe of vitur`) is gear to put on; it glows purple wherever it is, storage or inventory, until it's worn, and nothing else lights up until all of it is. Then the Deposit items glow; `everything else` in Deposit means whatever the Withdraw list doesn't keep. Once the inventory is clear the Withdraw list lights, in order. Gear you put on stays ticked off, and the same item on a later line means one more of it.
 
-With *Redeposit what's out of order* on (default), an ordered list is an inventory layout: click 1 belongs in the first slot the plan may use, click 2 in the next (slots holding something neither list mentions are left alone and skipped). Anything in one of those slots that isn't what belongs there glows to go in, an item of the list in the wrong slot included (`redeposit: Elder maul (wrong slot)` in the sidebar), and comes out again when its turn comes; what already sits in its slot stays.
+With *Redeposit what's out of order* on (default), an ordered list is an inventory layout: click 1 belongs in the first slot the plan may use, click 2 in the next (slots holding something neither list mentions are left alone and skipped). Anything in one of those slots that isn't what belongs there glows to go in, an item of the list in the wrong slot included (`redeposit: Elder maul (wrong slot)` in the sidebar), and comes out again when its turn comes; what already sits in its slot stays. So does the end of the list when you carry it further down in the right order, below where the rest will land: a rune pouch kept in the last slot is left there.
 
 A private storage holds 25 items (tiny) to 120 (massive), and an item it already has takes no new slot. When not everything fits, the plugin goes in rounds: it lights only the deposits there's room for, then the withdrawals those holes ask for, then the next deposits. With one free slot that's a swap at a time, and it picks the deposit that lets something out first. The sidebar shows the free slots while the storage is open; if it's full and nothing can come out, it says so (drop something or use the shared storage). Two carried items that need each other's slot need two free slots.
 
@@ -60,6 +60,9 @@ The game only sends a storage's contents while its interface is open, so both st
 | Count split overloads | on |
 
 ## Changelog
+
+1.2.2
+- The end of an ordered list that's already carried further down in order stays put (a rune pouch in the last slot is no longer asked back).
 
 1.2.1
 - The lists are called Deposit and Withdraw.

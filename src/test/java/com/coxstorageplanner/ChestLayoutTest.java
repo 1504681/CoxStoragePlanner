@@ -208,6 +208,37 @@ public class ChestLayoutTest
 	}
 
 	@Test
+	public void theEndOfTheListStaysWhereItIsCarried()
+	{
+		// the pouch lives in the last slot and never goes in; the list was copied from a full inventory
+		ChestPlan plan = plan("everything else", "Scythe of vitur", "Elder maul", "Xeric's aid, 2", "Overload", "Divine rune pouch");
+		Game game = new Game(plan, 25, Collections.emptySet(), "Scythe of vitur", "Elder maul", "Shark")
+			.store("Xeric's aid(4)", 2);
+		game.slots[27] = "Divine rune pouch (l)";
+		game.quantities[27] = 1;
+		ChestProgress progress = game.progress();
+		assertTrue(progress.outOfOrder.isEmpty());
+		assertFalse(progress.depositsSlot(27, "Divine rune pouch (l)"));
+		assertFalse(progress.depositsSlot(0, "Scythe of vitur"));
+		assertTrue(progress.depositsSlot(2, "Shark"));
+		assertTrue(progress.withdrawals.get(4).done);
+		// the overload is nowhere, which doesn't move the pouch either
+		assertTrue(progress.withdrawals.get(3).missing);
+		assertTrue(game.play().isDone());
+		assertEquals(1, game.deposits);
+		assertEquals(Arrays.asList("Scythe of vitur", "Elder maul", "Xeric's aid(4)", "Xeric's aid(4)"), game.carried().subList(0, 4));
+		assertNull(game.slots[4]);
+		assertEquals("Divine rune pouch (l)", game.slots[27]);
+
+		// carried above where the rest will land, it's in the way and goes back in
+		game = new Game(plan, 25, Collections.emptySet(), "Divine rune pouch (l)", "Scythe of vitur").store("Elder maul", 1);
+		progress = game.progress();
+		assertEquals(Arrays.asList("Divine rune pouch (l)", "Scythe of vitur"), progress.outOfOrder);
+		assertTrue(game.play().isDone());
+		assertEquals(Arrays.asList("Scythe of vitur", "Elder maul", "Divine rune pouch (l)"), game.carried());
+	}
+
+	@Test
 	public void whatIsInItsSlotStays()
 	{
 		ChestPlan plan = plan("everything", "Twisted bow", "Dragon claws", "Elder maul");
