@@ -584,12 +584,18 @@ class CoxStoragePanel extends PluginPanel
 			ChestProgress.Step next = progress.next();
 			if (progress.blocked)
 			{
-				chestSteps.addRow(stepRow("Storage full, nothing to withdraw: make room", BAD), 0);
+				chestSteps.addRow(stepRow("Storage and inventory full: make room", BAD), 0);
 			}
 			else if (progress.free >= 0)
 			{
 				chestSteps.addRow(stepRow("Storage: " + progress.free + (progress.free == 1 ? " slot free" : " slots free"),
 					progress.free == 0 ? WARN : MUTED), 0);
+			}
+			boolean first = true;
+			for (int[] move : progress.moves())
+			{
+				chestSteps.addRow(stepRow((first ? "→ " : "• ") + "drag: " + progress.nameAt(move[0]) + " to slot " + (move[1] + 1), WARN), 0);
+				first = false;
 			}
 			for (ChestProgress.Step step : progress.wears)
 			{
@@ -601,12 +607,18 @@ class CoxStoragePanel extends PluginPanel
 			}
 			for (String name : progress.outOfOrder)
 			{
-				chestSteps.addRow(stepRow("• redeposit: " + name + (progress.exact() ? " (wrong slot)" : " (comes later)"), WARN), 0);
+				// with the storage too full for that, it's dragged instead
+				if (progress.moves().isEmpty())
+				{
+					chestSteps.addRow(stepRow("• redeposit: " + name + (progress.exact() ? " (wrong slot)" : " (comes later)"), WARN), 0);
+				}
 			}
 			for (ChestProgress.Step step : progress.withdrawals)
 			{
 				String prefix = step.missing ? "– " : step.done ? "✓ " : step == next ? "→ " : "• ";
-				chestSteps.addRow(stepRow(prefix + (plan.isOrdered() ? step.order + ". " : "withdraw: ") + step.line.text
+				// numbered like the orbs in the storage: by click, and nothing for a step that's skipped
+				String number = step.span == 0 ? "" : step.span == 1 ? step.first + ". " : step.first + "-" + (step.first + step.span - 1) + ". ";
+				chestSteps.addRow(stepRow(prefix + (plan.isOrdered() ? number : "withdraw: ") + step.line.text
 					+ (step.missing ? " (not here)" : ""),
 					step.missing ? MUTED : step.done ? GOOD : step == next ? WARN : Color.WHITE), 0);
 			}

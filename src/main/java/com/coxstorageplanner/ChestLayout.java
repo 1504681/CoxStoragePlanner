@@ -18,10 +18,13 @@ import java.util.Set;
  * its slot is the first empty one. The end of the list may sit further down instead: carried in order
  * below where everything before it will land, it's left there, so a rune pouch kept in the last slot stays.
  *
- * <p>A storage has only so many slots (an item it already holds takes no new one), so not everything
- * may fit at once. Then it goes in rounds: put in what fits, take out what the holes ask for, put in
- * the next lot. With one free slot that's a swap at a time. Which deposit comes first is picked by how
- * many withdrawals it opens up.
+ * <p>A storage has only so many slots and every item takes one (a stack takes one for the lot), so not
+ * everything may fit at once. Then it goes in rounds: put in what fits, take out what the holes ask
+ * for, put in the next lot. With one free slot that's a swap at a time. Which deposit comes first is
+ * picked by how many withdrawals it opens up. While it's that tight, an item of the list in the wrong
+ * slot isn't put back in, it's dragged to its own ({@link #moves}); and when nothing fits and no hole
+ * is where its item can land, up to {@link #BATCH} items come out into whatever slots are empty, to be
+ * dragged into place, which frees their storage slots for what they displace.
  */
 final class ChestLayout
 {
@@ -29,6 +32,8 @@ final class ChestLayout
 	static final int STAYS = -2;
 	/** A slot whose item the take-out list wants somewhere else: back in, to come out in its place. */
 	static final int MISPLACED = -1;
+	/** How many items wait for a drag at a time, so how many come out of a full storage in one go. */
+	static final int BATCH = 4;
 
 	/** One click of the take-out list, which is one slot of the finished inventory. */
 	static final class Entry
@@ -73,9 +78,17 @@ final class ChestLayout
 	final List<Integer> queue;
 	/** Whether it's the turn of the withdrawals: nothing more fits, or a round of them isn't finished. */
 	final boolean withdrawing;
-	/** Things still have to go in, the storage is full and nothing can come out. */
+	/**
+	 * With the storage too full for everything: the drags that put an item of the list into the slot it
+	 * belongs in, as {from, to}, the next one first; whatever is in that slot swaps places with it.
+	 */
+	final List<int[]> moves;
+	/** Whether it's the turn of the drags. */
+	final boolean moving;
+	/** Things still have to go in, the storage is full, nothing can come out and no drag helps. */
 	final boolean blocked;
 
+	private final Set<String> stackable;
 	/** The inventory slots the plan may use, in order. */
 	private final int[] layout;
 
@@ -89,6 +102,7 @@ final class ChestLayout
 	ChestLayout(List<ChestPlan.Line> takeOut, List<ChestPlan.Line> putIn, int[] budgets, String[] names, int[] quantities,
 		Map<String, Integer> worn, Map<String, Integer> storage, int free, Set<String> stackable, boolean wasWithdrawing)
 	{
+		this.stackable = stackable;
 		int n = names.length;
 		Map<String, Integer> carried = new HashMap<>();
 		for (int s = 0; s < n; s++)
@@ -260,19 +274,109 @@ final class ChestLayout
 			}
 		}
 		Collections.sort(clicks);
-		queue = Collections.unmodifiableList(clicks);
 
-		if (storage == null || free < 0 || newSlots(names, storage) <= free)
+		boolean tight = storage != null && free >= 0 && newSlots(names, storage) > free;
+		Set<Integer> dragged = new LinkedHashSet<>();
+		Set<Integer> targets = new LinkedHashSet<>();
+		moves = Collections.unmodifiableList(tight ? drags(names, dragged, targets) : new ArrayList<>());
+		if (tight)
 		{
-			depositNow.addAll(wrong);
+			fit(names, quantities, storage, free, dragged);
 		}
 		else
 		{
-			fit(names, quantities, storage, free);
+			depositNow.addAll(wrong);
 		}
 		boolean room = !depositNow.isEmpty();
-		withdrawing = wrong.isEmpty() || (wasWithdrawing ? !queue.isEmpty() || !room : !room);
-		blocked = !wrong.isEmpty() && !room && queue.isEmpty();
+		// nothing fits and no hole is one its item can land in: out into the empty slots, a few at a time
+		if (tight && clicks.isEmpty() && (moves.isEmpty() ? !room : wasWithdrawing))
+		{
+			clicks = loose(names, storage, targets, BATCH - moves.size());
+		}
+		queue = Collections.unmodifiableList(clicks);
+
+		boolean out = wrong.isEmpty() || (wasWithdrawing && !queue.isEmpty());
+		moving = !out && !moves.isEmpty();
+		withdrawing = out || (!moving && !room);
+		blocked = withdrawing && !wrong.isEmpty() && queue.isEmpty();
+	}
+
+	/**
+	 * The drags that set the list right without the storage: for each slot of the list that lacks its
+	 * item, one carried out of place. A swap that sets both slots right comes first.
+	 *
+	 * @param dragged filled with the slots the drags start from
+	 * @param targets filled with the entries the drags are for
+	 */
+	private List<int[]> drags(String[] names, Set<Integer> dragged, Set<Integer> targets)
+	{
+		List<int[]> swaps = new ArrayList<>();
+		List<int[]> rest = new ArrayList<>();
+		for (int k = 0; k < head; k++)
+		{
+			int to = layout[k];
+			if (placed[k])
+			{
+				continue;
+			}
+			int from = -1;
+			boolean swap = false;
+			for (int s : wrong)
+			{
+				if (s == to || dragged.contains(s) || !entries.get(k).line.matches(names[s]))
+				{
+					continue;
+				}
+				boolean both = false;
+				for (int j = 0; j < head && names[to] != null; j++)
+				{
+					both |= layout[j] == s && entries.get(j).line.matches(names[to]);
+				}
+				if (from < 0 || (both && !swap))
+				{
+					from = s;
+					swap = both;
+				}
+			}
+			if (from >= 0)
+			{
+				dragged.add(from);
+				targets.add(k);
+				(swap ? swaps : rest).add(new int[]{from, to});
+			}
+		}
+		swaps.addAll(rest);
+		return swaps;
+	}
+
+	/**
+	 * Withdrawals that land wherever the first empty slots are, for a storage with no room: the first
+	 * entries of the list that aren't in place, aren't carried and are in the storage.
+	 */
+	private List<Integer> loose(String[] names, Map<String, Integer> storage, Set<Integer> targets, int most)
+	{
+		int empty = 0;
+		for (String name : names)
+		{
+			empty += name == null ? 1 : 0;
+		}
+		Map<String, Integer> stored = new HashMap<>(storage);
+		List<Integer> picks = new ArrayList<>();
+		for (int k = 0; k < head && picks.size() < Math.min(most, empty); k++)
+		{
+			Entry entry = entries.get(k);
+			if (placed[k] || targets.contains(k) || (entry.stack && holds(names, entry.line)))
+			{
+				continue;
+			}
+			String name = fullest(entry.line, stored);
+			if (name != null)
+			{
+				stored.merge(name, -(entry.stack ? entry.want : 1), Integer::sum);
+				picks.add(k);
+			}
+		}
+		return picks;
 	}
 
 	/** Nothing left to put in, and nothing more that can come out. */
@@ -281,38 +385,46 @@ final class ChestLayout
 		return wrong.isEmpty() && queue.isEmpty();
 	}
 
-	/** How many storage slots putting all of {@link #wrong} in would take: one per item the storage doesn't hold yet. */
+	/** How many storage slots putting all of {@link #wrong} in would take. */
 	private int newSlots(String[] names, Map<String, Integer> storage)
 	{
-		Set<String> fresh = new LinkedHashSet<>();
+		Set<String> stacks = new LinkedHashSet<>(storage.keySet());
+		int slots = 0;
 		for (int s : wrong)
 		{
-			if (!storage.containsKey(names[s]))
-			{
-				fresh.add(names[s]);
-			}
+			slots += cost(names[s], stacks);
+			stacks.add(names[s]);
 		}
-		return fresh.size();
+		return slots;
+	}
+
+	/** Storage slots an item takes: one, or none for a stackable one the storage holds a stack of. */
+	private int cost(String name, Set<String> stored)
+	{
+		return stackable.contains(name) && stored.contains(name) ? 0 : 1;
 	}
 
 	/**
 	 * Picks the deposits the storage has room for, each time the one that lets the most withdrawals
 	 * follow, the lowest slot among equals. So with one free slot the item in the way of something
 	 * that's in the storage goes before one whose own replacement is still in the inventory.
+	 *
+	 * @param dragged slots that get dragged into place instead
 	 */
-	private void fit(String[] names, int[] quantities, Map<String, Integer> storage, int free)
+	private void fit(String[] names, int[] quantities, Map<String, Integer> storage, int free, Set<Integer> dragged)
 	{
 		String[] slots = names.clone();
 		Map<String, Integer> stored = new HashMap<>(storage);
 		int room = free;
 		List<Integer> rest = new ArrayList<>(wrong);
+		rest.removeAll(dragged);
 		while (!rest.isEmpty())
 		{
 			int best = -1;
 			int bestScore = -1;
 			for (int s : rest)
 			{
-				if (room == 0 && !stored.containsKey(names[s]))
+				if (cost(names[s], stored.keySet()) > room)
 				{
 					continue;
 				}
@@ -331,10 +443,7 @@ final class ChestLayout
 			{
 				break;
 			}
-			if (!stored.containsKey(names[best]))
-			{
-				room--;
-			}
+			room -= cost(names[best], stored.keySet());
 			stored.merge(names[best], Math.max(1, quantities[best]), Integer::sum);
 			slots[best] = null;
 			rest.remove((Integer) best);

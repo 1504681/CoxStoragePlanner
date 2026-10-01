@@ -74,7 +74,7 @@ import net.runelite.client.util.Text;
 public class CoxStoragePlannerPlugin extends Plugin implements CoxStoragePanel.Actions
 {
 	// keep in sync with build.gradle
-	public static final String VERSION = "1.2.2";
+	public static final String VERSION = "1.3.0";
 
 	/** Ticks outside before a raid counts as left, so a relog or a reload doesn't wipe the raid's state. */
 	private static final int LEAVE_TICKS = 5;
@@ -111,6 +111,9 @@ public class CoxStoragePlannerPlugin extends Plugin implements CoxStoragePanel.A
 
 	@Inject
 	private ChestItemOverlay chestItemOverlay;
+
+	@Inject
+	private ChestMoveOverlay chestMoveOverlay;
 
 	@Inject
 	private Gson gson;
@@ -183,6 +186,8 @@ public class CoxStoragePlannerPlugin extends Plugin implements CoxStoragePanel.A
 	private boolean withdrawing;
 	/** Free slots of the open storage as last worked out, to notice when the interface fills its numbers in. */
 	private int lastFree = -1;
+	/** Slots of the private storage as last seen open this raid, to know its room while it's shut; -1 for unknown. */
+	private int privateCapacity = -1;
 	/** Progress of the chest in the room while its storage is shut, worked out once a tick. */
 	private ChestProgress shutChest;
 	private String shutChestKey;
@@ -191,6 +196,8 @@ public class CoxStoragePlannerPlugin extends Plugin implements CoxStoragePanel.A
 	private int closedStorage;
 	private int closedStorageUntil;
 	private boolean inRaid;
+	/** On Mount Quidamortem, outside the raid's entrance. */
+	private volatile boolean atLobby;
 	private boolean soloRaid;
 	/** The Team | Solo switch clicked during a raid, overriding the party size until the raid ends; null to follow it. */
 	private volatile Boolean raidSoloOverride;
@@ -232,6 +239,7 @@ public class CoxStoragePlannerPlugin extends Plugin implements CoxStoragePanel.A
 		overlayManager.add(chestItemOverlay);
 		overlayManager.add(chestMarkerOverlay);
 		overlayManager.add(chestScrollOverlay);
+		overlayManager.add(chestMoveOverlay);
 
 		wsClient.registerMessage(CoxStorageMessage.class);
 
@@ -247,6 +255,7 @@ public class CoxStoragePlannerPlugin extends Plugin implements CoxStoragePanel.A
 		overlayManager.remove(chestItemOverlay);
 		overlayManager.remove(chestMarkerOverlay);
 		overlayManager.remove(chestScrollOverlay);
+		overlayManager.remove(chestMoveOverlay);
 		storageUnits.clear();
 		clientToolbar.removeNavigation(navigationButton);
 		navigationShown = false;
@@ -273,6 +282,7 @@ public class CoxStoragePlannerPlugin extends Plugin implements CoxStoragePanel.A
 		lastInventory.clear();
 		openStorage = 0;
 		withdrawing = false;
+		privateCapacity = -1;
 		shutChest = null;
 		shutChestKey = null;
 		inRaid = false;
@@ -553,6 +563,15 @@ public class CoxStoragePlannerPlugin extends Plugin implements CoxStoragePanel.A
 	{
 		boolean changed = false;
 
+		Player me = client.getLocalPlayer();
+		WorldPoint spot = me == null ? null : me.getWorldLocation();
+		boolean lobby = spot != null && LOBBY_REGIONS.contains(spot.getRegionID());
+		if (lobby != atLobby)
+		{
+			atLobby = lobby;
+			changed = true;
+		}
+
 		if (client.getVarbitValue(VarbitID.RAIDS_CLIENT_INDUNGEON) == 1)
 		{
 			ticksOutside = 0;
@@ -682,11 +701,13 @@ public class CoxStoragePlannerPlugin extends Plugin implements CoxStoragePanel.A
 	}
 
 	private static final java.util.regex.Pattern NUMBER = java.util.regex.Pattern.compile("\\d+");
+	/** Mount Quidamortem, where the Chambers' entrance is. */
+	private static final Set<Integer> LOBBY_REGIONS = new HashSet<>(Arrays.asList(4662, 4663, 4918, 4919));
 
 	/**
 	 * Free slots of the open private storage, -1 when that can't be told (and for the shared one, which
-	 * the plans don't crowd). The size is the interface's own number when it's one of the five sizes,
-	 * else the size of the unit the player stands at.
+	 * the plans don't crowd). The interface's own two numbers when it shows them; else the size is the
+	 * unit's the player stands at, and every item in it takes a slot.
 	 */
 	private int storageFree()
 	{
@@ -699,31 +720,58 @@ public class CoxStoragePlannerPlugin extends Plugin implements CoxStoragePanel.A
 		{
 			return -1;
 		}
-		int used = 0;
+		Map<Integer, Integer> items = new HashMap<>();
 		for (Item item : storage.getItems())
 		{
 			if (item.getId() > 0)
 			{
-				used++;
+				items.merge(item.getId(), item.getQuantity(), Integer::sum);
 			}
 		}
-		int written = 0;
-		Widget capacity = client.getWidget(InterfaceID.RaidsStoragePrivate.CAPACITY);
-		if (capacity != null && capacity.getText() != null)
-		{
-			java.util.regex.Matcher m = NUMBER.matcher(Text.removeTags(capacity.getText()));
-			while (m.find() && m.group().length() < 5)
-			{
-				written = Integer.parseInt(m.group());
-			}
-		}
+		int counted = slotsTaken(items);
+		int shown = written(InterfaceID.RaidsStoragePrivate.OCCUPIEDSLOTS);
+		int written = written(InterfaceID.RaidsStoragePrivate.CAPACITY);
+		// the interface's count of what's in it, unless that's plainly something else
+		int used = shown >= items.size() && shown <= Math.max(counted, items.size()) ? shown : counted;
 		int slots = written == 25 || written == 30 || written == 60 || written == 90 || written == 120 ? written : nearestStorageSlots();
 		if (slots <= 0 && written > used)
 		{
 			slots = written;
 		}
 		// more in it than it's supposed to hold: the size is wrong, so don't go by it
-		return slots <= 0 || used > slots ? -1 : slots - used;
+		if (slots <= 0 || used > slots)
+		{
+			return -1;
+		}
+		privateCapacity = slots;
+		return slots - used;
+	}
+
+	/** The last number a widget's text shows, -1 for none. */
+	private int written(int widgetId)
+	{
+		Widget widget = client.getWidget(widgetId);
+		int written = -1;
+		if (widget != null && widget.getText() != null)
+		{
+			java.util.regex.Matcher m = NUMBER.matcher(Text.removeTags(widget.getText()));
+			while (m.find() && m.group().length() < 5)
+			{
+				written = Integer.parseInt(m.group());
+			}
+		}
+		return written;
+	}
+
+	/** Storage slots a set of items takes, by item id to quantity: one each, and one for a whole stack of a stackable one. */
+	private int slotsTaken(Map<Integer, Integer> items)
+	{
+		int slots = 0;
+		for (Map.Entry<Integer, Integer> e : items.entrySet())
+		{
+			slots += stackableNames.contains(itemName(e.getKey())) ? 1 : Math.max(1, e.getValue());
+		}
+		return slots;
 	}
 
 	@Subscribe
@@ -797,7 +845,18 @@ public class CoxStoragePlannerPlugin extends Plugin implements CoxStoragePanel.A
 		}
 		boolean opened = openedChests.contains(key);
 		Map<String, Integer> before = openedWithByChest.getOrDefault(key, items);
-		return new ChestProgress(plan, items, worn, before, opened ? privateTally() : null, config.chestPutBack(), stackableNames, slots);
+		// shut, the private storage's room is its size as last seen less what's tracked to be in it
+		int free = opened && privateCapacity > 0 ? Math.max(0, privateCapacity - slotsTaken(privateItems)) : -1;
+		return new ChestProgress(plan, items, worn, before, opened ? privateTally() : null, config.chestPutBack(), stackableNames,
+			slots.with(free, false));
+	}
+
+	/** Progress of the chest the player is at: the open storage's, or the room's while it's shut. Null without one. Client thread. */
+	ChestProgress progressHere()
+	{
+		ChestProgress open = openChest;
+		String key = currentChest;
+		return open != null ? open : key == null ? null : shutProgress(key);
 	}
 
 	/** {@link #progressFor} for the mark over the storage unit, which asks every frame: worked out once a tick. Client thread. */
@@ -1176,6 +1235,7 @@ public class CoxStoragePlannerPlugin extends Plugin implements CoxStoragePanel.A
 		openedChests.clear();
 		marking = false;
 		privateItems.clear();
+		privateCapacity = -1;
 		roomKeys.clear();
 		lastRoomSlot = null;
 		currentChest = null;
@@ -1506,7 +1566,7 @@ public class CoxStoragePlannerPlugin extends Plugin implements CoxStoragePanel.A
 			return;
 		}
 		PanelState state = snapshot();
-		boolean show = !config.hideSidebar() && (state.inRaid || !config.hideOutsideRaid());
+		boolean show = !config.hideSidebar() && (state.inRaid || atLobby || !config.hideOutsideRaid());
 		SwingUtilities.invokeLater(() ->
 		{
 			if (panel != target)

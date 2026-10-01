@@ -4,7 +4,8 @@ package com.coxstorageplanner;
 public enum ChestGlow
 {
 	NEXT_ONLY("Only the next click", 1),
-	NEXT_FOUR("Next four clicks, biggest first", 4),
+	/** How many is a setting of its own; four unless that says otherwise. */
+	NEXT_FOUR("Next few clicks, biggest first", 4),
 	GRADIENT("All, first to last", Integer.MAX_VALUE);
 
 	private final String displayName;

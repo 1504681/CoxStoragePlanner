@@ -10,19 +10,19 @@ The easy way to fill the lists is to click: tick **Mark by clicking** and, with 
 
 A chest works in three phases while its storage is open: gear to wear, then things to deposit, then things to withdraw. A Withdraw line starting with `wear` (`wear Scythe of vitur`) is gear to put on; it glows purple wherever it is, storage or inventory, until it's worn, and nothing else lights up until all of it is. Then the Deposit items glow; `everything else` in Deposit means whatever the Withdraw list doesn't keep. Once the inventory is clear the Withdraw list lights, in order. Gear you put on stays ticked off, and the same item on a later line means one more of it.
 
-With *Redeposit what's out of order* on (default), an ordered list is an inventory layout: click 1 belongs in the first slot the plan may use, click 2 in the next (slots holding something neither list mentions are left alone and skipped). Anything in one of those slots that isn't what belongs there glows to go in, an item of the list in the wrong slot included (`redeposit: Elder maul (wrong slot)` in the sidebar), and comes out again when its turn comes; what already sits in its slot stays. So does the end of the list when you carry it further down in the right order, below where the rest will land: a rune pouch kept in the last slot is left there.
+With *Organise the inventory* on (default), an ordered list is an inventory layout: click 1 belongs in the first slot the plan may use, click 2 in the next (slots holding something neither list mentions are left alone and skipped). Anything in one of those slots that isn't what belongs there glows to go in, an item of the list in the wrong slot included (`redeposit: Elder maul (wrong slot)` in the sidebar), and comes out again when its turn comes; what already sits in its slot stays. So does the end of the list when you carry it further down in the right order, below where the rest will land: a rune pouch kept in the last slot is left there.
 
-A private storage holds 25 items (tiny) to 120 (massive), and an item it already has takes no new slot. When not everything fits, the plugin goes in rounds: it lights only the deposits there's room for, then the withdrawals those holes ask for, then the next deposits. With one free slot that's a swap at a time, and it picks the deposit that lets something out first. The sidebar shows the free slots while the storage is open; if it's full and nothing can come out, it says so (drop something or use the shared storage). Two carried items that need each other's slot need two free slots.
+A private storage holds 25 items (tiny) to 120 (massive), every item taking a slot (a stack takes one). When not everything fits, the plugin goes in rounds: it lights only as many deposits as there are free slots, then the withdrawals those holes ask for, then the next deposits. While it's that tight, an item of the list carried in the wrong slot isn't redeposited: it gets an arrow to the slot it belongs in (drag it there; what's in that slot swaps places with it). With the storage full and no hole where its item would land, up to four items of the list come out into whatever slots are empty, get their arrows, and what they pushed aside goes into the room they left; then the rounds carry on. The sidebar shows the free slots and the drags. With storage and inventory both full it says to make room (drop something or use the shared storage). Turn *Organise the inventory* off and none of this happens: no arrows, no redeposits, the list only counts what you carry.
 
 **Copy my loadout** next to Withdraw sets all of that up from what you're wearing and carrying right now: worn gear as `wear` lines, then the inventory slot by slot (a run of the same item becomes one line with its number, `Xeric's aid, 3`), *Ordered withdrawal* ticked, and `everything else` in Deposit if it was empty. Set the chest before Olm up that way once, with the inventory laid out how you want it, and the plugin walks you through it every raid: put the gear on, dump what's left, pull the rest in order, same layout.
 
 With *Separate chests for solo raids* on, solo raids get their own set of chest plans (it starts as a copy of the team ones): inside a raid the party size picks the set (click the **Team | Solo** switch to override it for that raid), outside it the switch does.
 
-Tick **Ordered withdrawal** and the list becomes clicks 1, 2, 3. While the storage is open the items still to move glow: in the side inventory what goes in, in the storage what comes out. Every click has its own number: `Xeric's aid, 2` lights two of the five aids in the storage as 17 and 18 and leaves the rest dark, a stack is one click whatever the count (with `x5` in the slot's corner), and a step whose item isn't anywhere (not on you, not in the storage) takes no number. The next four clicks light: the next one gets a big orb over the item, the three after it small ones in the corner, shifting from the glow colour to the end colour. A setting switches that to only the next click, or to all of them. When the next item is scrolled out of view, the storage's scroll arrow lights, up or down (setting). The storage unit in the room you're in carries a `?` while its chest still has something to wear, put in or take out, and a green tick once the inventory says it's all done (setting).
+Tick **Ordered withdrawal** and the list becomes clicks 1, 2, 3. While the storage is open the items still to move glow: in the side inventory what goes in, in the storage what comes out. Every click has its own number, and a step whose item isn't anywhere (not on you, not in the storage) takes none. Clicking any of several identical items in the storage takes the first of them and leaves the rest in place, so only the last of a kind lights: `Xeric's aid, 3` is that one aid with `x3` in its corner, clicked three times while its number counts up. A stack is one click whatever the count. The next four clicks light (*Clicks shown*): the next one gets a big orb over the item, the ones after it small ones in the corner. The colour runs from the glow colour on click 1 to the end colour on the last click, so it shows how far along you are. A setting switches the glow to only the next click, or to all of them; *Outline thickness* sets how heavy the outline is. When the next item is scrolled out of view, the storage's scroll arrow lights, up or down (setting). The storage unit in the room you're in carries a `?` while its chest still has something to wear, put in or take out, and a green tick once the inventory says it's all done (setting).
 
 Under the lists the sidebar shows the plan as icons, what goes in and what comes out, `…` after the fourth. An item gets its icon once the plugin has seen it in a raid; until then the start of its name stands in.
 
-The sidebar icon sits near the bottom of the toolbar and only shows inside the raid; *Hide outside of the raid* and *Always hide the sidebar icon* change that.
+The sidebar icon sits near the bottom of the toolbar and only shows inside the raid and on Mount Quidamortem outside it; *Hide away from the Chambers* and *Always hide the sidebar icon* change that.
 
 ## Supplies
 
@@ -42,15 +42,17 @@ The game only sends a storage's contents while its interface is open, so both st
 |---|---|
 | **Chests** | |
 | Glow items | on |
-| Ordered withdrawal glow | next four clicks, biggest first |
+| Ordered withdrawal glow | next few clicks, biggest first |
+| Clicks shown | 4 |
 | Light the scroll arrow | on |
 | ? and tick over the storage unit | on |
-| Redeposit what's out of order | on |
+| Organise the inventory | on |
 | Separate chests for solo raids | off |
-| Glow colour / end colour / wear colour | cyan / pink / purple |
+| Glow colour / end colour / wear colour | yellow / green / purple |
+| Outline thickness | 2 |
 | Pulse | on |
 | **Sidebar** | |
-| Hide outside of the raid | on |
+| Hide away from the Chambers | on |
 | Always hide the sidebar icon | off |
 | Supplies tracker | off |
 | **Supplies tracker** | |
@@ -60,6 +62,15 @@ The game only sends a storage's contents while its interface is open, so both st
 | Count split overloads | on |
 
 ## Changelog
+
+1.3.0
+- Every item counts as a storage slot: no more deposits lit than the storage has room for, and none when it's full.
+- Storage too full to redeposit: an item in the wrong slot gets an arrow to drag it to its own. Storage full: up to four items come out, get their arrows, and make room for the rest.
+- *Redeposit what's out of order* is now *Organise the inventory*; off means no arrows and no redeposits.
+- Of several identical items in the storage only the last lights, to be clicked as often as its `x3` says.
+- New settings: *Clicks shown*, *Outline thickness* (default 2). Default colours are yellow to green, by how far along the list is.
+- The sidebar numbers the steps like the orbs: by click, and a step that's skipped has no number.
+- The sidebar icon also shows on Mount Quidamortem.
 
 1.2.2
 - The end of an ordered list that's already carried further down in order stays put (a rune pouch in the last slot is no longer asked back).

@@ -302,7 +302,7 @@ public class ChestPlanTest
 		ChestProgress progress = new ChestProgress(plan, none, none, none, storage);
 
 		// five aids in the storage, one frame: 2 and 3, then (past the noxifer) 5 and 6, the fifth dark
-		ChestItemOverlay overlay = new ChestItemOverlay(null, null, null);
+		ChestItemOverlay overlay = new ChestItemOverlay(null, null, null, null);
 		int[] numbers = new int[5];
 		for (int i = 0; i < 5; i++)
 		{
@@ -314,7 +314,7 @@ public class ChestPlanTest
 		assertEquals(4, overlay.withdrawal(progress, "Noxifer", 1, Integer.MAX_VALUE).number);
 
 		// with the next four clicks lit, the fifth and sixth wait
-		overlay = new ChestItemOverlay(null, null, null);
+		overlay = new ChestItemOverlay(null, null, null, null);
 		for (int i = 0; i < 5; i++)
 		{
 			ChestItemOverlay.Click click = overlay.withdrawal(progress, "Xeric's aid(4)", 1, 4);
@@ -324,6 +324,13 @@ public class ChestPlanTest
 		ChestItemOverlay.Click last = overlay.withdrawal(progress, "Noxifer", 1, 4);
 		assertEquals(4, last.number);
 		assertEquals(3, last.rank);
+
+		// one aid standing for all five (the last of them is the one to click): clicks 2 and 3, then the noxifer is in between
+		overlay = new ChestItemOverlay(null, null, null, null);
+		ChestItemOverlay.Click run = overlay.withdrawal(progress, "Xeric's aid(4)", 5, Integer.MAX_VALUE);
+		assertEquals(2, run.number);
+		assertEquals(2, run.count);
+		assertEquals(1, run.rank);
 	}
 
 	@Test

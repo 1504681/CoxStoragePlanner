@@ -9,12 +9,15 @@ import java.awt.Rectangle;
 import java.awt.RenderingHints;
 import java.awt.image.BufferedImage;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.IdentityHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import javax.inject.Inject;
+import net.runelite.api.Client;
 import net.runelite.api.gameval.InterfaceID;
+import net.runelite.api.widgets.Widget;
 import net.runelite.api.widgets.WidgetItem;
 import net.runelite.client.game.ItemManager;
 import net.runelite.client.ui.FontManager;
@@ -23,41 +26,72 @@ import net.runelite.client.ui.overlay.WidgetItemOverlay;
 /**
  * Outlines the items a chest plan still wants moved: in the side inventory what goes in,
  * in the storage what comes out, and gear to put on in its own colour before either. With an ordered
- * plan every click has its own number, so "Xeric's aid, 2" lights two of them as 17 and 18; the next
- * click pulses, and with the next four lit the orbs shrink and shift colour the further off they are.
- * A stack that wants more than one out shows "x5" in the slot's top right corner. A plan held to the
- * slot lights the inventory by slot, so only the items out of place, and only what the storage has room for.
+ * plan every click has its own number; the next click pulses, and with the next few lit the orbs
+ * shrink the further off they are, while the colour runs from the first click's to the last one's.
+ * Clicking any of several identical items in the storage takes the first of them and leaves the rest
+ * where they are, so only the last of a kind lights: "Xeric's aid, 3" is that one aid clicked three
+ * times, with "x3" in the slot's top right corner. A plan held to the slot lights the inventory by slot,
+ * so only the items out of place, and never more than the storage has room for.
  */
 class ChestItemOverlay extends WidgetItemOverlay
 {
+	private final Client client;
 	private final CoxStoragePlannerPlugin plugin;
 	private final CoxStoragePlannerConfig config;
 	private final ItemManager itemManager;
 
 	@Inject
-	ChestItemOverlay(CoxStoragePlannerPlugin plugin, CoxStoragePlannerConfig config, ItemManager itemManager)
+	ChestItemOverlay(Client client, CoxStoragePlannerPlugin plugin, CoxStoragePlannerConfig config, ItemManager itemManager)
 	{
+		this.client = client;
 		this.plugin = plugin;
 		this.config = config;
 		this.itemManager = itemManager;
 		showOnInterfaces(InterfaceID.RAIDS_STORAGE_PRIVATE, InterfaceID.RAIDS_STORAGE_SHARED, InterfaceID.RAIDS_STORAGE_SIDE);
 	}
 
-	/** Orb diameters for the next withdrawal and the three after it. The next one covers the item. */
-	private static final int[] ORB_SIZES = {28, 16, 12, 10};
-	/** How much the colour fades for each of those, on top of its shift towards the end colour. */
-	private static final float[] ORB_FADE = {1f, 0.9f, 0.8f, 0.7f};
+	/** Orb diameter of the next withdrawal, which covers the item, and of the nearest and furthest ones after it. */
+	private static final int ORB_NEXT = 28;
+	private static final int ORB_NEAR = 16;
+	private static final int ORB_FAR = 10;
 
 	/** How much of each step has lit up so far this frame, so "Xeric's aid, 2" lights two and not the whole row. */
 	private final Map<ChestProgress.Step, Integer> lit = new IdentityHashMap<>();
 	/** The withdrawals of a plan held to the slot that an item lit up for so far this frame. */
 	private final Set<ChestProgress.Click> taken = Collections.newSetFromMap(new IdentityHashMap<>());
+	/** Per item in the open storage: the widget index of the last one of it, and how many of it there are. */
+	private final Map<Integer, int[]> twins = new HashMap<>();
+	/** The widget those indices are children of. */
+	private int twinsParent;
+	/** Deposits lit so far this frame, by item name. */
+	private final Map<String, Integer> named = new HashMap<>();
+	/** Deposits lit so far this frame that take a storage slot. */
+	private int slotsLit;
 
 	@Override
 	public Dimension render(Graphics2D graphics)
 	{
 		lit.clear();
 		taken.clear();
+		named.clear();
+		slotsLit = 0;
+		twins.clear();
+		int group = plugin.getOpenStorage();
+		Widget items = group == 0 ? null : client.getWidget(group == InterfaceID.RAIDS_STORAGE_SHARED
+			? InterfaceID.RaidsStorageShared.ITEMS : InterfaceID.RaidsStoragePrivate.ITEMS);
+		Widget[] slots = items == null ? null : items.getDynamicChildren();
+		twinsParent = items == null ? -1 : items.getId();
+		for (int i = 0; slots != null && i < slots.length; i++)
+		{
+			Widget slot = slots[i];
+			if (slot == null || slot.getItemId() <= 0 || slot.isHidden())
+			{
+				continue;
+			}
+			int[] twin = twins.computeIfAbsent(slot.getItemId(), id -> new int[]{-1, 0});
+			twin[0] = Math.max(twin[0], slot.getIndex());
+			twin[1] += Math.max(1, slot.getItemQuantity());
+		}
 		return super.render(graphics);
 	}
 
@@ -73,64 +107,95 @@ class ChestItemOverlay extends WidgetItemOverlay
 		return false;
 	}
 
-	/** A storage item's place in the withdrawal: its step, its click's number in the plan, and how many clicks come first. */
+	/** A storage item's place in the withdrawal: its step, its first click's number in the plan, how many clicks come first, and how many it takes. */
 	static final class Click
 	{
 		final ChestProgress.Step step;
 		final int number;
 		final int rank;
+		final int count;
 
-		private Click(ChestProgress.Step step, int number, int rank)
+		private Click(ChestProgress.Step step, int number, int rank, int count)
 		{
 			this.step = step;
 			this.number = number;
 			this.rank = rank;
+			this.count = count;
 		}
 	}
 
 	/**
-	 * The withdrawal a storage item lights up for this frame, null for none. Each item takes the next
-	 * click of the first step that still wants one, so "Xeric's aid, 2" lights two aids as two clicks
-	 * and leaves the rest of the row dark. With an ordered plan only the next {@code limit} clicks light.
+	 * The withdrawal a storage item lights up for this frame, null for none. An item takes the next
+	 * clicks that want it, as many as there are of it, so "Xeric's aid, 2" lights two single aids as
+	 * two clicks, or one that stands for several as both. With an ordered plan only the next
+	 * {@code limit} clicks light, and an item only takes clicks that follow one another.
+	 *
+	 * @param quantity how many items this one stands for
 	 */
 	Click withdrawal(ChestProgress progress, String name, int quantity, int limit)
 	{
+		ChestProgress.Step step = null;
+		int number = 0;
+		int first = 0;
+		int count = 0;
+		int left = Math.max(1, quantity);
 		if (progress.exact())
 		{
-			// the clicks that can be made now, each lighting one item; a pile in the storage takes as many as it holds
+			// the clicks that can be made now
 			List<ChestProgress.Click> queue = progress.queue();
-			Click first = null;
-			int used = 0;
-			for (int rank = 0; rank < queue.size() && rank < limit && used < Math.max(1, quantity); rank++)
+			for (int rank = 0; rank < queue.size() && rank < limit && left > 0; rank++)
 			{
 				ChestProgress.Click click = queue.get(rank);
+				if (count > 0 && rank != first + count)
+				{
+					// something else is clicked in between
+					break;
+				}
 				if (taken.contains(click) || !click.step.line.matches(name) || !progress.fullest(click.step.line, name))
 				{
 					continue;
 				}
 				taken.add(click);
-				used += click.step.stack ? quantity : 1;
-				if (first == null)
+				left -= click.step.stack ? left : 1;
+				if (count++ == 0)
 				{
-					first = new Click(click.step, click.number, rank);
+					step = click.step;
+					number = click.number;
+					first = rank;
 				}
 			}
-			return first;
+			return count == 0 ? null : new Click(step, number, first, count);
 		}
 		boolean ordered = progress.plan.isOrdered();
-		for (ChestProgress.Step step : progress.withdrawSteps(name, limit))
+		for (ChestProgress.Step next : progress.withdrawSteps(name, limit))
 		{
-			int already = lit.getOrDefault(step, 0);
+			int already = lit.getOrDefault(next, 0);
 			// a stack is one click however many come out of it
-			int ahead = step.stack ? 0 : already;
-			if (already >= step.remaining || (ordered && step.rank + ahead >= limit))
+			int ahead = next.stack ? 0 : already;
+			if (left <= 0 || already >= next.remaining || (ordered && next.rank + ahead >= limit))
 			{
 				continue;
 			}
-			lit.put(step, already + Math.max(1, quantity));
-			return new Click(step, step.click + ahead, step.rank + ahead);
+			if (ordered && count > 0 && next.click + ahead != number + count)
+			{
+				break;
+			}
+			int take = next.stack ? left : Math.min(left, next.remaining - already);
+			if (ordered && !next.stack)
+			{
+				take = Math.min(take, limit - next.rank - ahead);
+			}
+			lit.put(next, already + take);
+			left -= take;
+			if (count == 0)
+			{
+				step = next;
+				number = next.click + ahead;
+				first = next.rank + ahead;
+			}
+			count += next.stack ? 1 : take;
 		}
-		return null;
+		return count == 0 ? null : new Click(step, number, first, count);
 	}
 
 	/** Whether this is the first item lit for the step, which is the one that carries its "xN". */
@@ -157,9 +222,8 @@ class ChestItemOverlay extends WidgetItemOverlay
 		int order = 0;
 		int orb = 0;
 		boolean pulse;
-		// whether the slot says how many, as "x5" in its corner
-		boolean counted;
-		ChestProgress.Step step;
+		// the "x5" in the slot's corner: how many, or how many clicks
+		int times = 0;
 		ChestProgress.Step wear = progress.wearStep(name);
 		if (wear != null)
 		{
@@ -168,69 +232,87 @@ class ChestItemOverlay extends WidgetItemOverlay
 			{
 				return;
 			}
-			step = wear;
-			counted = firstLit(step, widgetItem);
+			times = firstLit(wear, widgetItem) ? wear.remaining : 0;
 			color = config.chestWearColor();
 			pulse = true;
 		}
 		else if (group == InterfaceID.RAIDS_STORAGE_SIDE && progress.exact())
 		{
-			// the side inventory's widgets are its slots, in order
+			// the side inventory's widgets are its slots, in order; if this one isn't, go by the name
 			int slot = widgetItem.getWidget().getIndex();
-			if (!progress.depositsSlot(slot, name))
+			int already = named.getOrDefault(name, 0);
+			if (name.equals(progress.nameAt(slot)) ? !progress.depositsSlot(slot, name) : already >= progress.depositsNamed(name))
 			{
 				return;
 			}
-			step = progress.depositStepAt(slot, name);
-			counted = widgetItem.getQuantity() > 1;
+			named.put(name, already + 1);
+			times = widgetItem.getQuantity() > 1 ? widgetItem.getQuantity() : 0;
 			color = config.chestGlowColor();
 			pulse = true;
 		}
 		else if (group == InterfaceID.RAIDS_STORAGE_SIDE)
 		{
-			step = progress.depositStep(name);
-			if (step == null ? !progress.highlightsDeposit(name) : enough(step, widgetItem))
+			ChestProgress.Step step = progress.depositStep(name);
+			if (step == null ? !progress.highlightsDeposit(name) : lit.getOrDefault(step, 0) >= step.remaining)
 			{
 				return;
 			}
-			counted = step != null && firstLit(step, widgetItem);
+			// no more than the storage has slots for
+			if (!progress.freeDeposit(name) && slotsLit++ >= progress.free)
+			{
+				return;
+			}
+			if (step != null)
+			{
+				enough(step, widgetItem);
+				times = firstLit(step, widgetItem) ? step.remaining : 0;
+			}
 			color = config.chestGlowColor();
 			pulse = true;
 		}
 		else
 		{
+			int quantity = widgetItem.getQuantity();
+			int[] twin = widgetItem.getWidget().getParentId() == twinsParent ? twins.get(itemId) : null;
+			if (twin != null)
+			{
+				// a click on any of them takes the first and leaves the rest in place: the last one is the one to click
+				if (widgetItem.getWidget().getIndex() != twin[0])
+				{
+					return;
+				}
+				quantity = twin[1];
+			}
 			ChestGlow mode = config.chestOrderedGlow();
+			int limit = mode == ChestGlow.NEXT_FOUR ? Math.max(2, config.chestGlowCount()) : mode.getSteps();
 			boolean ordered = progress.plan.isOrdered();
-			Click click = withdrawal(progress, name, widgetItem.getQuantity(), mode.getSteps());
+			Click click = withdrawal(progress, name, quantity, limit);
 			if (click == null)
 			{
 				return;
 			}
-			step = click.step;
-			counted = progress.exact() ? step.stack : firstLit(step, widgetItem) && (!ordered || step.stack);
+			times = click.step.stack ? click.step.remaining : click.count;
 			int rank = click.rank;
 			pulse = !ordered || rank == 0;
 			color = config.chestGlowColor();
 			if (ordered)
 			{
 				order = click.number;
-				int near = Math.min(rank, ORB_SIZES.length - 1);
-				switch (mode)
+				// the colour says how far along the list is
+				if (progress.clicks > 1)
 				{
-					case NEXT_FOUR:
-						// the next click is big and in the first colour, the ones behind it smaller and nearer the last
-						orb = ORB_SIZES[near];
-						color = fade(blend(color, config.chestGlowLastColor(), near / (float) (ORB_SIZES.length - 1)), ORB_FADE[near]);
-						break;
-					case GRADIENT:
-						orb = ORB_SIZES[1];
-						if (progress.clicks > 1)
-						{
-							color = blend(color, config.chestGlowLastColor(), (order - 1) / (float) (progress.clicks - 1));
-						}
-						break;
-					default:
-						orb = ORB_SIZES[1];
+					color = blend(color, config.chestGlowLastColor(), (order - 1) / (float) (progress.clicks - 1));
+				}
+				if (mode == ChestGlow.NEXT_FOUR)
+				{
+					// the next click is big, the ones behind it smaller and fainter the further off
+					float far = rank == 0 || limit <= 2 ? 0 : (rank - 1) / (float) (limit - 2);
+					orb = rank == 0 ? ORB_NEXT : Math.round(ORB_NEAR - (ORB_NEAR - ORB_FAR) * far);
+					color = rank == 0 ? color : fade(color, 0.9f - 0.2f * far);
+				}
+				else
+				{
+					orb = ORB_NEAR;
 				}
 			}
 		}
@@ -242,15 +324,25 @@ class ChestItemOverlay extends WidgetItemOverlay
 		}
 		Rectangle bounds = widgetItem.getCanvasBounds();
 		BufferedImage outline = itemManager.getItemOutline(itemId, widgetItem.getQuantity(), color);
-		graphics.drawImage(outline, bounds.x, bounds.y, null);
+		// thicker is the same outline again, shifted a pixel each way
+		int reach = Math.max(1, Math.min(4, config.chestGlowWidth())) - 1;
+		for (int dx = -reach; dx <= reach; dx++)
+		{
+			for (int dy = -reach; dy <= reach; dy++)
+			{
+				if (Math.abs(dx) + Math.abs(dy) <= reach)
+				{
+					graphics.drawImage(outline, bounds.x + dx, bounds.y + dy, null);
+				}
+			}
+		}
 		if (order > 0)
 		{
 			drawOrb(graphics, bounds, orb, color, order);
 		}
-		// numbered clicks already say how many; a stack, a deposit or gear says it here
-		if (counted && step != null && step.remaining > 1 && step.remaining != Integer.MAX_VALUE)
+		if (times > 1 && times != Integer.MAX_VALUE)
 		{
-			drawCount(graphics, bounds, step.remaining, color);
+			drawCount(graphics, bounds, times, color);
 		}
 	}
 
@@ -282,7 +374,7 @@ class ChestItemOverlay extends WidgetItemOverlay
 	{
 		Object aa = graphics.getRenderingHint(RenderingHints.KEY_ANTIALIASING);
 		graphics.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
-		boolean centered = size >= ORB_SIZES[0];
+		boolean centered = size >= ORB_NEXT;
 		int x = centered ? bounds.x + (bounds.width - size) / 2 : bounds.x - 1;
 		int y = centered ? bounds.y + (bounds.height - size) / 2 : bounds.y - 1;
 		int ring = centered ? 2 : 1;

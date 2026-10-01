@@ -26,6 +26,8 @@ import java.util.regex.Pattern;
  * the wrong slot goes back in. Without the slots it only asks back what belongs to a later step.
  *
  * <p>A storage that's full turns the phases into rounds: put in what fits, take out, put in the rest.
+ * Every item takes a storage slot of its own; only a stackable one joins the stack already in there.
+ * Held to the slot, a plan in a storage that tight also asks for drags inside the inventory ({@link Phase#MOVE}).
  */
 public final class ChestProgress
 {
@@ -49,15 +51,21 @@ public final class ChestProgress
 		public final int rank;
 		/** Withdrawals: whether it comes out as one stack, so one click whatever the count. */
 		public final boolean stack;
+		/** Withdrawals: the number of the step's first click, done ones included. */
+		public final int first;
+		/** Withdrawals: how many clicks the step is; 0 for one that's worn or nowhere to be found, which has no number. */
+		public final int span;
 
 		Step(ChestPlan.Line line, boolean deposit, boolean done, int order, int remaining)
 		{
-			this(line, deposit, done, order, false, remaining, 0, 0, false);
+			this(line, deposit, done, order, false, remaining, 0, 0, false, 0, 0);
 		}
 
 		Step(ChestPlan.Line line, boolean deposit, boolean done, int order, boolean missing, int remaining,
-			int click, int rank, boolean stack)
+			int click, int rank, boolean stack, int first, int span)
 		{
+			this.first = first;
+			this.span = span;
 			this.line = line;
 			this.deposit = deposit;
 			this.done = done;
@@ -72,7 +80,9 @@ public final class ChestProgress
 
 	public enum Phase
 	{
-		WEAR, DEPOSIT, WITHDRAW
+		WEAR, DEPOSIT, WITHDRAW,
+		/** Drag an item to the slot it belongs in. */
+		MOVE
 	}
 
 	/** The inventory slot by slot, and how the storage stands. */
@@ -149,6 +159,7 @@ public final class ChestProgress
 	private final Carried carried;
 	/** With a layout, the withdrawals that can be made now, in click order. */
 	private final List<Click> queue;
+	private final Set<String> stackable;
 
 	public ChestProgress(ChestPlan plan, Map<String, Integer> inventory)
 	{
@@ -192,6 +203,7 @@ public final class ChestProgress
 		this.plan = plan;
 		this.storage = storage;
 		this.carried = carried;
+		this.stackable = stackable;
 		this.free = carried == null ? -1 : carried.free;
 		Map<String, Integer> held = storage == null ? Collections.emptyMap() : storage;
 		List<ChestPlan.Line> takeOut = ChestPlan.parse(plan.getWithdraw());
@@ -272,6 +284,7 @@ public final class ChestProgress
 					continue;
 				}
 				int any = -1;
+				int total = 0;
 				int first = -1;
 				int more = 0;
 				boolean stack = false;
@@ -283,6 +296,7 @@ public final class ChestProgress
 						continue;
 					}
 					any = any < 0 ? k : any;
+					total++;
 					stack = entry.stack;
 					if (!layout.placed[k] || layout.shortBy[k] > 0)
 					{
@@ -294,7 +308,8 @@ public final class ChestProgress
 				boolean missing = any < 0 && !layout.worn[i];
 				int rank = first < 0 ? 0 : layout.queue.indexOf(first);
 				byLine[i] = new Step(line, false, first < 0, ++order, missing, more,
-					(first >= 0 ? first : any >= 0 ? any : layout.entries.size()) + 1, rank < 0 ? Integer.MAX_VALUE : rank, stack);
+					(first >= 0 ? first : any >= 0 ? any : layout.entries.size()) + 1, rank < 0 ? Integer.MAX_VALUE : rank, stack,
+					any + 1, total);
 				withdrawals.add(byLine[i]);
 			}
 			for (int k : layout.queue)
@@ -335,7 +350,8 @@ public final class ChestProgress
 				boolean stack = stacks(line, stackable, inventory) || stacks(line, stackable, held);
 				int mine = stack ? (done || there > 0 ? 1 : 0) : got + there;
 				int made = stack ? (done ? 1 : 0) : got;
-				withdrawals.add(new Step(line, false, done || missing, ++order, missing, remaining, clicks + made + 1, pending, stack));
+				withdrawals.add(new Step(line, false, done || missing, ++order, missing, remaining, clicks + made + 1, pending, stack,
+					clicks + 1, mine));
 				clicks += mine;
 				pending += mine - made;
 			}
@@ -394,8 +410,7 @@ public final class ChestProgress
 			{
 				String name = carried.names[slot];
 				space |= name == null;
-				room |= name != null && storage != null && storage.containsKey(name)
-					&& (pendingDeposit(name) != null || outOfOrder.contains(name));
+				room |= name != null && freeDeposit(name) && (pendingDeposit(name) != null || outOfOrder.contains(name));
 			}
 			boolean out = space && !allDone(withdrawals);
 			round = carried != null && carried.withdrawing ? out || !room : !room;
@@ -404,7 +419,7 @@ public final class ChestProgress
 		}
 		this.withdrawing = round;
 		this.blocked = stuck;
-		this.phase = !allDone(wears) ? Phase.WEAR : round ? Phase.WITHDRAW : Phase.DEPOSIT;
+		this.phase = !allDone(wears) ? Phase.WEAR : layout != null && layout.moving ? Phase.MOVE : round ? Phase.WITHDRAW : Phase.DEPOSIT;
 	}
 
 	/** Whether the take-out list keeps an item, so "everything else" leaves it alone. */
@@ -422,7 +437,8 @@ public final class ChestProgress
 
 	/**
 	 * What to do now: wear the gear, then put things in, then take things out. When the storage can't
-	 * hold it all the last two alternate: withdrawals while nothing more fits, until that round is through.
+	 * hold it all the last two alternate: withdrawals while nothing more fits, until that round is through,
+	 * with drags in between for what's carried in the wrong slot.
 	 */
 	public Phase phase()
 	{
@@ -634,6 +650,59 @@ public final class ChestProgress
 			return depositStep(itemName);
 		}
 		return phase == Phase.DEPOSIT && layout.via[slot] >= 0 ? deposits.get(layout.via[slot]) : null;
+	}
+
+	/** How many of an item go in now, with the plan held to the slot; for a caller that can't tell the slots apart. */
+	public int depositsNamed(String itemName)
+	{
+		int count = 0;
+		if (layout != null && phase == Phase.DEPOSIT)
+		{
+			for (int slot : layout.depositNow)
+			{
+				count += carried.names[slot].equals(itemName) ? 1 : 0;
+			}
+		}
+		return count;
+	}
+
+	/** Whether putting an item in takes no storage slot: the room isn't known, or it joins a stack that's in there. */
+	public boolean freeDeposit(String itemName)
+	{
+		return free < 0 || storage == null || (stackable.contains(itemName) && storage.containsKey(itemName));
+	}
+
+	/** The drags to make now, as {from, to} inventory slots, the next one first. Empty in any other phase. */
+	public List<int[]> moves()
+	{
+		return phase == Phase.MOVE ? layout.moves : Collections.emptyList();
+	}
+
+	/**
+	 * With the storage too full to put it back in: the inventory slot of an item to drag to the slot it
+	 * belongs in, -1 when there's no such thing to do. What's in that slot swaps places with it.
+	 */
+	public int moveFrom()
+	{
+		return phase == Phase.MOVE ? layout.moves.get(0)[0] : -1;
+	}
+
+	/** The inventory slot {@link #moveFrom} goes to. */
+	public int moveTo()
+	{
+		return phase == Phase.MOVE ? layout.moves.get(0)[1] : -1;
+	}
+
+	/** The name of the item in an inventory slot, null for an empty one or without the slots. */
+	public String nameAt(int slot)
+	{
+		return carried == null || slot < 0 || slot >= carried.names.length ? null : carried.names[slot];
+	}
+
+	/** The name of the item to drag, null for none. */
+	public String moveName()
+	{
+		return nameAt(moveFrom());
 	}
 
 	/** With the plan held to the slot: the withdrawals that can be made now, in click order. Empty in any other phase. */

@@ -7,6 +7,7 @@ import net.runelite.client.config.Config;
 import net.runelite.client.config.ConfigGroup;
 import net.runelite.client.config.ConfigItem;
 import net.runelite.client.config.ConfigSection;
+import net.runelite.client.config.Range;
 
 @ConfigGroup(CoxStoragePlannerConfig.GROUP)
 public interface CoxStoragePlannerConfig extends Config
@@ -57,7 +58,7 @@ public interface CoxStoragePlannerConfig extends Config
 	@ConfigItem(
 		keyName = "chestOrderedGlow",
 		name = "Ordered withdrawal glow",
-		description = "With an ordered withdrawal: glow just the next click, the next four with the biggest orb on the next one, or all of them. The orbs go from the glow colour to the end colour",
+		description = "With an ordered withdrawal: glow just the next click, the next few with the biggest orb on the next one (how many is the setting below), or all of them",
 		section = chestSection,
 		position = 1
 	)
@@ -66,12 +67,38 @@ public interface CoxStoragePlannerConfig extends Config
 		return ChestGlow.NEXT_FOUR;
 	}
 
+	@Range(min = 2, max = 120)
+	@ConfigItem(
+		keyName = "chestGlowCount",
+		name = "Clicks shown",
+		description = "How many clicks of an ordered withdrawal glow at a time, with the glow set to the next few",
+		section = chestSection,
+		position = 2
+	)
+	default int chestGlowCount()
+	{
+		return 4;
+	}
+
+	@Range(min = 1, max = 4)
+	@ConfigItem(
+		keyName = "chestGlowWidth",
+		name = "Outline thickness",
+		description = "How thick the outline around a glowing item is, in pixels",
+		section = chestSection,
+		position = 10
+	)
+	default int chestGlowWidth()
+	{
+		return 2;
+	}
+
 	@ConfigItem(
 		keyName = "chestScrollHint",
 		name = "Light the scroll arrow",
 		description = "When the next item to click is scrolled out of view in the storage, light the scroll bar's up or down arrow",
 		section = chestSection,
-		position = 2
+		position = 3
 	)
 	default boolean chestScrollHint()
 	{
@@ -83,7 +110,7 @@ public interface CoxStoragePlannerConfig extends Config
 		name = "? and tick over the storage unit",
 		description = "Draw a ? over the storage unit in your room while its chest has things to do, and a green tick once it's all done",
 		section = chestSection,
-		position = 3
+		position = 4
 	)
 	default boolean chestMarkers()
 	{
@@ -92,10 +119,10 @@ public interface CoxStoragePlannerConfig extends Config
 
 	@ConfigItem(
 		keyName = "chestPutBack",
-		name = "Redeposit what's out of order",
-		description = "With an ordered withdrawal, ask to deposit again anything you carry in the wrong inventory slot, so it is withdrawn in its place and the inventory ends up in the order of the list",
+		name = "Organise the inventory",
+		description = "With an ordered withdrawal, end up with the inventory in the order of the list: what you carry in the wrong slot is deposited again to come out in its place, or, when the storage is too full for that, gets an arrow to drag it to its slot. Off: no arrows, and the list only counts what you carry",
 		section = chestSection,
-		position = 4
+		position = 5
 	)
 	default boolean chestPutBack()
 	{
@@ -107,7 +134,7 @@ public interface CoxStoragePlannerConfig extends Config
 		name = "Separate chests for solo raids",
 		description = "Keep a second set of chest plans for solo raids, picked by the raid's party size (the Team | Solo switch outside a raid). Starts as a copy of the team plans",
 		section = chestSection,
-		position = 5
+		position = 6
 	)
 	default boolean separateSoloChests()
 	{
@@ -118,26 +145,26 @@ public interface CoxStoragePlannerConfig extends Config
 	@ConfigItem(
 		keyName = "chestGlowColor",
 		name = "Glow colour",
-		description = "Outline colour, and the colour of the next click's orb",
+		description = "Outline colour, and the colour of an ordered withdrawal's first click",
 		section = chestSection,
-		position = 6
+		position = 7
 	)
 	default Color chestGlowColor()
 	{
-		return new Color(0, 255, 220, 220);
+		return new Color(255, 215, 0, 230);
 	}
 
 	@Alpha
 	@ConfigItem(
 		keyName = "chestGlowLastColor",
 		name = "End colour",
-		description = "Colour of the last orb of an ordered withdrawal: the fourth with the next four lit, the last click with all of them",
+		description = "Colour of an ordered withdrawal's last click. The clicks in between shade from the glow colour to this one, so the colour shows how far along the list is",
 		section = chestSection,
-		position = 7
+		position = 8
 	)
 	default Color chestGlowLastColor()
 	{
-		return new Color(255, 80, 200, 220);
+		return new Color(40, 230, 70, 230);
 	}
 
 	@Alpha
@@ -146,7 +173,7 @@ public interface CoxStoragePlannerConfig extends Config
 		name = "Wear colour",
 		description = "Outline of gear still to put on, in the storage and the inventory",
 		section = chestSection,
-		position = 8
+		position = 9
 	)
 	default Color chestWearColor()
 	{
@@ -158,7 +185,7 @@ public interface CoxStoragePlannerConfig extends Config
 		name = "Pulse",
 		description = "Make the outline breathe",
 		section = chestSection,
-		position = 9
+		position = 11
 	)
 	default boolean chestGlowPulse()
 	{
@@ -167,8 +194,8 @@ public interface CoxStoragePlannerConfig extends Config
 
 	@ConfigItem(
 		keyName = "hideOutsideRaid",
-		name = "Hide outside of the raid",
-		description = "Only show the sidebar icon while you're in the Chambers of Xeric",
+		name = "Hide away from the Chambers",
+		description = "Only show the sidebar icon in the Chambers of Xeric and outside its entrance on Mount Quidamortem",
 		section = sidebarSection,
 		position = 0
 	)

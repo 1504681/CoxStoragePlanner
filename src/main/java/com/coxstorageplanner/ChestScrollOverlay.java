@@ -60,10 +60,18 @@ class ChestScrollOverlay extends Overlay
 		int top = items.getScrollY();
 		int bottom = top + items.getHeight();
 		int direction = 0;
+		// of several identical items the last one is the one that glows
+		java.util.Map<Integer, Widget> last = new java.util.LinkedHashMap<>();
 		for (Widget slot : slots)
 		{
-			int itemId = slot == null ? -1 : slot.getItemId();
-			if (itemId <= 0 || !progress.wantsNext(plugin.itemName(itemId)))
+			if (slot != null && slot.getItemId() > 0 && !slot.isHidden())
+			{
+				last.merge(slot.getItemId(), slot, (a, b) -> b.getIndex() > a.getIndex() ? b : a);
+			}
+		}
+		for (Widget slot : last.values())
+		{
+			if (!progress.wantsNext(plugin.itemName(slot.getItemId())))
 			{
 				continue;
 			}
