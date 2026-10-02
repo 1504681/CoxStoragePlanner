@@ -23,7 +23,8 @@ import java.util.Set;
  * <p>A storage has only so many slots and every item takes one (a stack takes one for the lot), so not
  * everything may fit at once. Then it goes in rounds: put in what fits, take out what the holes ask
  * for, put in the next lot. With one free slot that's a swap at a time. Which deposit comes first is
- * picked by how many withdrawals it opens up. While it's that tight, an item of the list in the wrong
+ * picked by how many withdrawals it opens up. A storage with room for everything never waits: whatever
+ * is in the wrong slot goes in before the next withdrawal. While it's tight, an item of the list in the wrong
  * slot isn't put back in, it's dragged to its own ({@link #moves}); and when nothing fits and no hole
  * is where its item can land, up to {@link #BATCH} items come out into whatever slots are empty, to be
  * dragged into place, which frees their storage slots for what they displace.
@@ -78,7 +79,7 @@ final class ChestLayout
 	final Set<Integer> depositNow = new LinkedHashSet<>();
 	/** The entries that can be withdrawn right now, in click order. */
 	final List<Integer> queue;
-	/** Whether it's the turn of the withdrawals: nothing more fits, or a round of them isn't finished. */
+	/** Whether it's the turn of the withdrawals: nothing more fits, or a tight storage's round of them isn't finished. */
 	final boolean withdrawing;
 	/**
 	 * With the storage too full for everything: the drags that put an item of the list into the slot it
@@ -87,6 +88,8 @@ final class ChestLayout
 	final List<int[]> moves;
 	/** Whether it's the turn of the drags. */
 	final boolean moving;
+	/** Whether {@link #queue} is of the kind that lands in whatever slots are empty, to be dragged into place after. */
+	final boolean loose;
 	/** Things still have to go in, the storage is full, nothing can come out and no drag helps. */
 	final boolean blocked;
 
@@ -104,9 +107,10 @@ final class ChestLayout
 	 * @param storage what the storage holds, null if the client hasn't seen it (then anything is assumed to be in it)
 	 * @param free storage slots left, negative for unknown
 	 * @param wasWithdrawing whether the last look at this storage was in a round of withdrawals
+	 * @param wasLoose whether that round was one of withdrawals into whatever slots were empty
 	 */
 	ChestLayout(List<ChestPlan.Line> takeOut, List<ChestPlan.Line> putIn, int[] budgets, String[] names, int[] quantities,
-		Map<String, Integer> worn, Map<String, Integer> storage, int free, Set<String> stackable, boolean wasWithdrawing)
+		Map<String, Integer> worn, Map<String, Integer> storage, int free, Set<String> stackable, boolean wasWithdrawing, boolean wasLoose)
 	{
 		this.stackable = stackable;
 		int n = names.length;
@@ -318,13 +322,17 @@ final class ChestLayout
 		}
 		boolean room = !depositNow.isEmpty();
 		// nothing fits and no hole is one its item can land in: out into the empty slots, a few at a time
-		if (tight && clicks.isEmpty() && (moves.isEmpty() ? !room : wasWithdrawing))
+		// and once that has begun, until BATCH of them wait for their drag
+		boolean anywhere = tight && clicks.isEmpty() && (moves.isEmpty() ? !room : wasWithdrawing && wasLoose);
+		if (anywhere)
 		{
 			clicks = loose(names, storage, targets, BATCH - moves.size());
 		}
+		loose = anywhere && !clicks.isEmpty();
 		queue = Collections.unmodifiableList(clicks);
 
-		boolean out = wrong.isEmpty() || (wasWithdrawing && !queue.isEmpty());
+		// only a storage that's tight goes in rounds; with room, what's out of place goes in as soon as it is
+		boolean out = wrong.isEmpty() || (tight && wasWithdrawing && !queue.isEmpty());
 		moving = !out && !moves.isEmpty();
 		withdrawing = out || (!moving && !room);
 		blocked = withdrawing && !wrong.isEmpty() && queue.isEmpty();

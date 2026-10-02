@@ -43,8 +43,11 @@ final class PanelState
 	Map<String, Integer> carriedItems = new LinkedHashMap<>();
 	/** Item name to quantity worn, which counts as withdrawn. */
 	Map<String, Integer> wornItems = new LinkedHashMap<>();
-	/** Progress at the storage that's open right now, null when none is. */
+	/** Progress at the storage that's open right now, or at the room's while it's shut; null when there's neither. */
 	ChestProgress openChest;
+	/** Whether a storage's interface is open, and whether it's the private one. */
+	boolean storageOpen;
+	boolean privateStorageOpen;
 	/** Item ids seen for the lines of the chest lists, by the line's text in lower case, for the sidebar's icons. */
 	Map<String, Integer> lineIcons = new LinkedHashMap<>();
 	/** Whether clicking items in a storage or the inventory adds them to the chest's lists. */

@@ -28,8 +28,9 @@ import net.runelite.client.ui.overlay.WidgetItemOverlay;
 /**
  * Outlines the items a chest plan still wants moved: in the side inventory what goes in,
  * in the storage what comes out, and gear to put on in its own colour before either. With an ordered
- * plan every click has its own number; the next click pulses, and with the next few lit the orbs
- * shrink the further off they are, while the colour runs from the first click's to the last one's.
+ * plan the clicks to make are numbered from the next one: 1, 2, 3, whatever is done already. The next
+ * click pulses, and with the next few lit the orbs shrink the further off they are, while the colour
+ * says how far down the list a click is, from the first one's to the last one's.
  * Clicking any of several identical items in the storage takes the first of them and leaves the rest
  * where they are, so only the last of a kind lights: "Xeric's aid, 3" is that one aid clicked three
  * times, with "x3" in the slot's top right corner. A plan held to the slot lights the inventory by slot,
@@ -109,7 +110,10 @@ class ChestItemOverlay extends WidgetItemOverlay
 		return false;
 	}
 
-	/** A storage item's place in the withdrawal: its step, its first click's number in the plan, how many clicks come first, and how many it takes. */
+	/**
+	 * A storage item's place in the withdrawal: its step, its first click's place in the whole list
+	 * (for the colour), how many clicks come first (its number, less one), and how many it takes.
+	 */
 	static final class Click
 	{
 		final ChestProgress.Step step;
@@ -299,11 +303,12 @@ class ChestItemOverlay extends WidgetItemOverlay
 			color = config.chestGlowColor();
 			if (ordered)
 			{
-				order = click.number;
+				// numbered from the next click, so what's left always reads 1, 2, 3
+				order = rank + 1;
 				// the colour says how far along the list is
 				if (progress.clicks > 1)
 				{
-					color = blend(color, config.chestGlowLastColor(), (order - 1) / (float) (progress.clicks - 1));
+					color = blend(color, config.chestGlowLastColor(), (click.number - 1) / (float) (progress.clicks - 1));
 				}
 				if (mode == ChestGlow.NEXT_FOUR)
 				{

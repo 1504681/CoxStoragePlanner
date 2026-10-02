@@ -591,10 +591,28 @@ class CoxStoragePanel extends PluginPanel
 				chestSteps.addRow(stepRow("Storage: " + progress.free + (progress.free == 1 ? " slot free" : " slots free"),
 					progress.free == 0 ? WARN : MUTED), 0);
 			}
-			boolean first = true;
-			for (int[] move : progress.moves())
+			else if (state.privateStorageOpen && progress.exact())
 			{
-				chestSteps.addRow(stepRow((first ? "→ " : "• ") + "drag: " + progress.nameAt(move[0]) + " to slot " + (move[1] + 1), WARN), 0);
+				chestSteps.addRow(stepRow("Storage: free slots unknown", MUTED), 0);
+			}
+			ChestProgress.Phase phase = progress.phase();
+			String now = progress.blocked || progress.isDone() ? null
+				: phase == ChestProgress.Phase.MOVE ? "Now: drag along the arrow"
+				: !state.storageOpen ? null
+				: phase == ChestProgress.Phase.WEAR ? "Now: put on the outlined gear"
+				: phase == ChestProgress.Phase.DEPOSIT ? "Now: deposit what's outlined"
+				: progress.loose() ? "Now: withdraw 1, 2, 3... then drag them"
+				: plan.isOrdered() ? "Now: withdraw 1, 2, 3..." : "Now: withdraw what's outlined";
+			if (now != null)
+			{
+				chestSteps.addRow(stepRow(now, WARN), 0);
+			}
+			boolean first = true;
+			for (int[] move : progress.drags())
+			{
+				// waiting for a round of withdrawals to finish, it's listed all the same
+				chestSteps.addRow(stepRow((first && phase == ChestProgress.Phase.MOVE ? "→ " : "• ") + "drag: " + progress.nameAt(move[0])
+					+ " to slot " + (move[1] + 1), WARN), 0);
 				first = false;
 			}
 			for (ChestProgress.Step step : progress.wears)
@@ -603,21 +621,22 @@ class CoxStoragePanel extends PluginPanel
 			}
 			for (ChestProgress.Step step : progress.deposits)
 			{
-				chestSteps.addRow(stepRow((step.done ? "✓ " : "• ") + "deposit: " + step.line.text, step.done ? GOOD : Color.WHITE), 0);
+				chestSteps.addRow(stepRow((step.done ? "✓ " : phase == ChestProgress.Phase.DEPOSIT ? "→ " : "• ") + "deposit: " + step.line.text,
+					step.done ? GOOD : Color.WHITE), 0);
 			}
 			for (String name : progress.outOfOrder)
 			{
-				// with the storage too full for that, it's dragged instead
-				if (progress.moves().isEmpty())
-				{
-					chestSteps.addRow(stepRow("• redeposit: " + name + (progress.exact() ? " (wrong slot)" : " (comes later)"), WARN), 0);
-				}
+				chestSteps.addRow(stepRow((progress.redepositsNow(name) ? "→ " : "• ") + "redeposit: " + name
+					+ (progress.exact() ? " (wrong slot)" : " (comes later)"), WARN), 0);
 			}
+			boolean taking = phase == ChestProgress.Phase.WITHDRAW;
 			for (ChestProgress.Step step : progress.withdrawals)
 			{
-				String prefix = step.missing ? "– " : step.done ? "✓ " : step == next ? "→ " : "• ";
-				// numbered like the orbs in the storage: by click, and nothing for a step that's skipped
-				String number = step.span == 0 ? "" : step.span == 1 ? step.first + ". " : step.first + "-" + (step.first + step.span - 1) + ". ";
+				String prefix = step.missing ? "– " : step.done ? "✓ " : step == next && taking ? "→ " : "• ";
+				// numbered like the orbs in the storage: the clicks to make now, from 1; nothing for one that's done or has to wait
+				int from = step.rank + 1;
+				String number = !taking || step.done || step.now == 0 || step.rank == Integer.MAX_VALUE ? ""
+					: step.now == 1 ? from + ". " : from + "-" + (step.rank + step.now) + ". ";
 				chestSteps.addRow(stepRow(prefix + (plan.isOrdered() ? number : "withdraw: ") + step.line.text
 					+ (step.missing ? " (not here)" : ""),
 					step.missing ? MUTED : step.done ? GOOD : step == next ? WARN : Color.WHITE), 0);

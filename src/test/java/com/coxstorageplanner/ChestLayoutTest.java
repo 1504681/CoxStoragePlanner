@@ -28,6 +28,7 @@ public class ChestLayoutTest
 		final Set<String> stackable;
 		final int capacity;
 		boolean withdrawing;
+		boolean loose;
 		int deposits;
 		int withdrawals;
 		int drags;
@@ -80,8 +81,9 @@ public class ChestLayoutTest
 		{
 			Map<String, Integer> inventory = inventory();
 			ChestProgress progress = new ChestProgress(plan, inventory, Collections.emptyMap(), inventory, new HashMap<>(storage),
-				true, stackable, new ChestProgress.Carried(slots.clone(), quantities.clone(), capacity < 0 ? -1 : capacity - used(), withdrawing));
+				true, stackable, new ChestProgress.Carried(slots.clone(), quantities.clone(), capacity < 0 ? -1 : capacity - used(), withdrawing, loose));
 			withdrawing = progress.withdrawing;
+			loose = progress.loose();
 			return progress;
 		}
 
@@ -199,6 +201,103 @@ public class ChestLayoutTest
 			}
 			return names;
 		}
+	}
+
+	@Test
+	public void whatLandsInTheWrongSlotGoesBackInBeforeTheNextWithdrawal()
+	{
+		ChestPlan plan = plan("everything else", "Twisted bow", "Dragon claws", "Revitalisation, 2", "Overload", "Book of the dead", "Rune pouch");
+		Game game = new Game(plan, 25, Collections.emptySet()).store("Twisted bow", 1).store("Dragon claws", 1).store("Revitalisation(4)", 2)
+			.store("Overload (+)(4)", 1).store("Book of the dead", 1).store("Rune pouch", 1);
+		assertEquals(ChestProgress.Phase.WITHDRAW, game.progress().phase());
+		game.withdraw("Twisted bow", 1);
+		assertEquals(ChestProgress.Phase.WITHDRAW, game.progress().phase());
+		// the book clicked far too early lands in the claws' slot: with room in the storage it goes back in right away
+		game.withdraw("Book of the dead", 1);
+		ChestProgress progress = game.progress();
+		assertEquals(ChestProgress.Phase.DEPOSIT, progress.phase());
+		assertEquals(Arrays.asList("Book of the dead"), progress.outOfOrder);
+		assertTrue(progress.redepositsNow("Book of the dead"));
+		assertTrue(progress.depositsSlot(1, "Book of the dead"));
+		assertFalse(progress.depositsSlot(0, "Twisted bow"));
+		assertTrue(progress.queue().isEmpty());
+		assertTrue(game.play().isDone());
+		assertEquals(Arrays.asList("Twisted bow", "Dragon claws", "Revitalisation(4)", "Revitalisation(4)", "Overload (+)(4)",
+			"Book of the dead", "Rune pouch"), game.carried());
+		assertEquals(1, game.deposits);
+		assertEquals(0, game.drags);
+	}
+
+	@Test
+	public void theClicksLeftCountFromOne()
+	{
+		ChestPlan plan = plan("everything else", "Twisted bow", "Dragon claws", "Xeric's aid, 3", "Overload", "Lockpick", "Book of the dead");
+		// the bow, the claws and one aid are in place; the overload is carried too, right where it goes
+		Game game = new Game(plan, 25, Collections.emptySet(), "Twisted bow", "Dragon claws", "Xeric's aid(4)", null, null, "Overload (+)(4)")
+			.store("Xeric's aid(4)", 4).store("Book of the dead", 1);
+		ChestProgress progress = game.progress();
+		assertEquals(ChestProgress.Phase.WITHDRAW, progress.phase());
+		assertTrue(progress.withdrawals.get(0).done);
+		// two aids are the next two clicks, 1 and 2, and the book past the overload is 3: no gap for what's done
+		ChestProgress.Step aids = progress.withdrawals.get(2);
+		assertEquals(0, aids.rank);
+		assertEquals(2, aids.now);
+		assertTrue(progress.withdrawals.get(3).done);
+		assertEquals(0, progress.withdrawals.get(3).now);
+		assertTrue(progress.withdrawals.get(4).missing);
+		assertEquals(0, progress.withdrawals.get(4).now);
+		ChestProgress.Step book = progress.withdrawals.get(5);
+		assertEquals(2, book.rank);
+		assertEquals(1, book.now);
+		// in the whole list those are clicks 4, 5 and 7, which the colour goes by
+		assertEquals(4, progress.queue().get(0).number);
+		assertEquals(7, progress.queue().get(2).number);
+		ChestItemOverlay overlay = new ChestItemOverlay(null, null, null, null);
+		ChestItemOverlay.Click click = overlay.withdrawal(progress, "Xeric's aid(4)", 4, 4);
+		assertEquals(0, click.rank);
+		assertEquals(2, click.count);
+		assertEquals(2, overlay.withdrawal(progress, "Book of the dead", 1, 4).rank);
+
+		// the same going by counts
+		Map<String, Integer> inventory = game.inventory();
+		ChestProgress counts = new ChestProgress(plan, inventory, Collections.emptyMap(), inventory, new HashMap<>(game.storage), false, Collections.emptySet());
+		assertEquals(0, counts.withdrawals.get(2).rank);
+		assertEquals(2, counts.withdrawals.get(2).now);
+		assertEquals(0, counts.withdrawals.get(3).now);
+		assertEquals(2, counts.withdrawals.get(5).rank);
+		assertEquals(1, counts.withdrawals.get(5).now);
+	}
+
+	@Test
+	public void aDragThatWaitsIsListedAsADrag()
+	{
+		ChestPlan plan = plan("everything else", "Gear a", "Gear b", "Gear c", "Gear d", "Gear e");
+		// one slot free; e sits where c goes, and a round of withdrawals is on
+		Game game = new Game(plan, 5, Collections.emptySet(), "Junk a", "Junk b", "Gear e")
+			.store("Gear a", 1).store("Gear b", 1).store("Gear c", 1).store("Gear d", 1);
+		game.withdrawing = true;
+		ChestProgress progress = game.progress();
+		assertEquals(1, progress.free);
+		assertEquals(ChestProgress.Phase.WITHDRAW, progress.phase());
+		assertFalse(progress.loose());
+		assertEquals(1, progress.queue().size());
+		assertTrue(progress.queue().get(0).step.line.matches("Gear d"));
+		// the drag isn't up yet, and it isn't called a redeposit meanwhile
+		assertTrue(progress.moves().isEmpty());
+		assertEquals(1, progress.drags().size());
+		assertEquals(2, progress.drags().get(0)[0]);
+		assertEquals(4, progress.drags().get(0)[1]);
+		assertTrue(progress.outOfOrder.isEmpty());
+
+		// d is out, nothing else comes out in place: the drag, not a, b and c into whatever slots are empty
+		game.withdraw("Gear d", 1);
+		progress = game.progress();
+		assertEquals(ChestProgress.Phase.MOVE, progress.phase());
+		assertEquals("Gear e", progress.moveName());
+		assertTrue(game.play().isDone());
+		assertEquals(Arrays.asList("Gear a", "Gear b", "Gear c", "Gear d", "Gear e"), game.carried());
+		assertEquals(1, game.drags);
+		assertEquals(2, game.deposits);
 	}
 
 	private static ChestPlan plan(String putIn, String... takeOut)

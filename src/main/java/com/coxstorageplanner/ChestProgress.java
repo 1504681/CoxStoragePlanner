@@ -25,7 +25,8 @@ import java.util.regex.Pattern;
  * it goes by {@link ChestLayout}, where a withdrawal is done when its slot holds it and anything in
  * the wrong slot goes back in. Without the slots it only asks back what belongs to a later step.
  *
- * <p>A storage that's full turns the phases into rounds: put in what fits, take out, put in the rest.
+ * <p>Held to the slot, something out of place goes in before the next withdrawal, as soon as it is.
+ * A storage that's full turns the phases into rounds: put in what fits, take out, put in the rest.
  * Every item takes a storage slot of its own; only a stackable one joins the stack already in there.
  * Held to the slot, a plan in a storage that tight also asks for drags inside the inventory ({@link Phase#MOVE}).
  */
@@ -47,8 +48,13 @@ public final class ChestProgress
 		 * "Xeric's aid, 2" is two clicks, a stack is one, and a skipped step is none.
 		 */
 		public final int click;
-		/** Withdrawals: clicks still to make before this step's next one, 0 for the very next click. */
+		/**
+		 * Withdrawals: clicks still to make before this step's next one, 0 for the very next click;
+		 * MAX_VALUE for one that can't be made yet. The clicks are numbered by it, from 1.
+		 */
 		public final int rank;
+		/** Withdrawals: how many clicks of the step can be made now, one after the other. */
+		public final int now;
 		/** Withdrawals: whether it comes out as one stack, so one click whatever the count. */
 		public final boolean stack;
 		/** Withdrawals: the number of the step's first click, done ones included. */
@@ -58,12 +64,13 @@ public final class ChestProgress
 
 		Step(ChestPlan.Line line, boolean deposit, boolean done, int order, int remaining)
 		{
-			this(line, deposit, done, order, false, remaining, 0, 0, false, 0, 0);
+			this(line, deposit, done, order, false, remaining, 0, 0, false, 0, 0, 0);
 		}
 
 		Step(ChestPlan.Line line, boolean deposit, boolean done, int order, boolean missing, int remaining,
-			int click, int rank, boolean stack, int first, int span)
+			int click, int rank, boolean stack, int first, int span, int now)
 		{
+			this.now = now;
 			this.first = first;
 			this.span = span;
 			this.line = line;
@@ -95,13 +102,21 @@ public final class ChestProgress
 		final int free;
 		/** Whether the last look at this storage was in a round of withdrawals, so the round gets finished. */
 		final boolean withdrawing;
+		/** Whether that round was of withdrawals into whatever slots were empty ({@link ChestProgress#loose}). */
+		final boolean loose;
 
 		public Carried(String[] names, int[] quantities, int free, boolean withdrawing)
+		{
+			this(names, quantities, free, withdrawing, false);
+		}
+
+		public Carried(String[] names, int[] quantities, int free, boolean withdrawing, boolean loose)
 		{
 			this.names = names;
 			this.quantities = quantities;
 			this.free = free;
 			this.withdrawing = withdrawing;
+			this.loose = loose;
 		}
 
 		public Carried(List<String> names)
@@ -109,9 +124,9 @@ public final class ChestProgress
 			this(names.toArray(new String[0]), ones(names.size()), -1, false);
 		}
 
-		public Carried with(int free, boolean withdrawing)
+		public Carried with(int free, boolean withdrawing, boolean loose)
 		{
-			return new Carried(names, quantities, free, withdrawing);
+			return new Carried(names, quantities, free, withdrawing, loose);
 		}
 
 		private static int[] ones(int n)
@@ -140,7 +155,10 @@ public final class ChestProgress
 	public final List<Step> wears;
 	public final List<Step> deposits;
 	public final List<Step> withdrawals;
-	/** Carried items to put back before taking out: in the wrong slot, or without the slots, of a later step. */
+	/**
+	 * Carried items to put back before taking out: in the wrong slot, or without the slots, of a later step.
+	 * One that gets dragged to its slot instead ({@link #drags}) isn't among them.
+	 */
 	public final List<String> outOfOrder;
 	/** Clicks the whole take-out list comes to, skipped steps left out. */
 	public final int clicks;
@@ -250,7 +268,7 @@ public final class ChestProgress
 		}
 		ChestLayout layout = carried != null && putBack && plan.isOrdered() && carries
 			? new ChestLayout(takeOut, putIn, budgets, carried.names, carried.quantities, worn, storage, carried.free,
-				stackable, carried.withdrawing)
+				stackable, carried.withdrawing, carried.loose)
 			: null;
 		this.layout = layout;
 		this.counts = layout == null ? null : new ChestProgress(plan, inventory, worn, openedWith, storage, false, stackable, carried);
@@ -270,9 +288,14 @@ public final class ChestProgress
 				}
 				deposits.add(new Step(putIn.get(j), true, done, 0, budgets[j]));
 			}
+			Set<Integer> dragged = new java.util.HashSet<>();
+			for (int[] move : layout.moves)
+			{
+				dragged.add(move[0]);
+			}
 			for (int slot : layout.wrong)
 			{
-				if (layout.via[slot] == ChestLayout.MISPLACED && !outOfOrder.contains(carried.names[slot]))
+				if (layout.via[slot] == ChestLayout.MISPLACED && !dragged.contains(slot) && !outOfOrder.contains(carried.names[slot]))
 				{
 					outOfOrder.add(carried.names[slot]);
 				}
@@ -290,6 +313,8 @@ public final class ChestProgress
 				int total = 0;
 				int first = -1;
 				int more = 0;
+				int rank = -1;
+				int now = 0;
 				boolean stack = false;
 				for (int k = 0; k < layout.entries.size(); k++)
 				{
@@ -301,6 +326,12 @@ public final class ChestProgress
 					any = any < 0 ? k : any;
 					total++;
 					stack = entry.stack;
+					int queued = layout.queue.indexOf(k);
+					if (queued >= 0)
+					{
+						rank = rank < 0 ? queued : rank;
+						now++;
+					}
 					if (!layout.placed[k] || layout.shortBy[k] > 0)
 					{
 						first = first < 0 ? k : first;
@@ -309,10 +340,9 @@ public final class ChestProgress
 				}
 				// no slot of its own: worn, or nowhere to get it from
 				boolean missing = any < 0 && !layout.worn[i];
-				int rank = first < 0 ? 0 : layout.queue.indexOf(first);
 				byLine[i] = new Step(line, false, first < 0, ++order, missing, more,
-					(first >= 0 ? first : any >= 0 ? any : layout.entries.size()) + 1, rank < 0 ? Integer.MAX_VALUE : rank, stack,
-					any + 1, total);
+					(first >= 0 ? first : any >= 0 ? any : layout.entries.size()) + 1, first < 0 ? 0 : rank < 0 ? Integer.MAX_VALUE : rank, stack,
+					any + 1, total, now);
 				withdrawals.add(byLine[i]);
 			}
 			for (int k : layout.queue)
@@ -354,7 +384,7 @@ public final class ChestProgress
 				int mine = stack ? (done || there > 0 ? 1 : 0) : got + there;
 				int made = stack ? (done ? 1 : 0) : got;
 				withdrawals.add(new Step(line, false, done || missing, ++order, missing, remaining, clicks + made + 1, pending, stack,
-					clicks + 1, mine));
+					clicks + 1, mine, mine - made));
 				clicks += mine;
 				pending += mine - made;
 			}
@@ -688,6 +718,42 @@ public final class ChestProgress
 	public List<int[]> moves()
 	{
 		return phase == Phase.MOVE ? layout.moves : Collections.emptyList();
+	}
+
+	/**
+	 * Whether the withdrawals to make now land out of place, in whatever slots are empty, and get dragged
+	 * to their own after. To hand back in with the next {@link Carried}, like {@link #withdrawing}.
+	 */
+	public boolean loose()
+	{
+		return phase == Phase.WITHDRAW && layout != null && layout.loose;
+	}
+
+	/** Every drag the plan asks for, whether it's their turn yet or not. */
+	public List<int[]> drags()
+	{
+		return layout == null ? Collections.emptyList() : layout.moves;
+	}
+
+	/** Whether one of {@link #outOfOrder} goes back in right now: it's the deposits' turn and the storage has room for it. */
+	public boolean redepositsNow(String itemName)
+	{
+		if (phase != Phase.DEPOSIT)
+		{
+			return false;
+		}
+		if (layout == null)
+		{
+			return outOfOrder.contains(itemName);
+		}
+		for (int slot : layout.depositNow)
+		{
+			if (layout.via[slot] == ChestLayout.MISPLACED && carried.names[slot].equals(itemName))
+			{
+				return true;
+			}
+		}
+		return false;
 	}
 
 	/**

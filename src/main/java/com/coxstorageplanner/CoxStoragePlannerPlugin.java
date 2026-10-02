@@ -74,7 +74,7 @@ import net.runelite.client.util.Text;
 public class CoxStoragePlannerPlugin extends Plugin implements CoxStoragePanel.Actions
 {
 	// keep in sync with build.gradle
-	public static final String VERSION = "1.3.2";
+	public static final String VERSION = "1.3.3";
 
 	/** Ticks outside before a raid counts as left, so a relog or a reload doesn't wipe the raid's state. */
 	private static final int LEAVE_TICKS = 5;
@@ -184,6 +184,7 @@ public class CoxStoragePlannerPlugin extends Plugin implements CoxStoragePanel.A
 	private int openStorage;
 	/** Whether the open storage is in a round of withdrawals: it was too full to take more, so things come out first. */
 	private boolean withdrawing;
+	private boolean looseRound;
 	/** Free slots of the open storage as last worked out, to notice when the interface fills its numbers in. */
 	private int lastFree = -1;
 	/** Slots of the private storage as last seen open this raid, to know its room while it's shut; -1 for unknown. */
@@ -282,6 +283,7 @@ public class CoxStoragePlannerPlugin extends Plugin implements CoxStoragePanel.A
 		lastInventory.clear();
 		openStorage = 0;
 		withdrawing = false;
+		looseRound = false;
 		privateCapacity = -1;
 		shutChest = null;
 		shutChestKey = null;
@@ -357,6 +359,7 @@ public class CoxStoragePlannerPlugin extends Plugin implements CoxStoragePanel.A
 		{
 			openStorage = event.getGroupId();
 			withdrawing = false;
+			looseRound = false;
 			synchronized (lock)
 			{
 				openedWith = inventoryItems;
@@ -848,7 +851,7 @@ public class CoxStoragePlannerPlugin extends Plugin implements CoxStoragePanel.A
 		// shut, the private storage's room is its size as last seen less what's tracked to be in it
 		int free = opened && privateCapacity > 0 ? Math.max(0, privateCapacity - slotsTaken(privateItems)) : -1;
 		return new ChestProgress(plan, items, worn, before, opened ? privateTally() : null, config.chestPutBack(), stackableNames,
-			slots.with(free, false));
+			slots.with(free, false, false));
 	}
 
 	/** Progress of the chest the player is at: the open storage's, or the room's while it's shut. Null without one. Client thread. */
@@ -1156,8 +1159,9 @@ public class CoxStoragePlannerPlugin extends Plugin implements CoxStoragePanel.A
 			? InventoryID.RAIDS_SHAREDSTORAGE : InventoryID.RAIDS_PRIVATESTORAGE);
 		lastFree = storageFree();
 		ChestProgress progress = new ChestProgress(plan, items, worn, before, tally(storage), config.chestPutBack(), stackableNames,
-			slots.with(lastFree, withdrawing));
+			slots.with(lastFree, withdrawing, looseRound));
 		withdrawing = progress.withdrawing;
+		looseRound = progress.loose();
 		openChest = progress;
 	}
 
@@ -1685,6 +1689,8 @@ public class CoxStoragePlannerPlugin extends Plugin implements CoxStoragePanel.A
 		state.marking = marking;
 		state.putBack = config.chestPutBack();
 		state.openChest = openChest != null || currentChest == null ? openChest : progressFor(currentChest);
+		state.storageOpen = openStorage != 0;
+		state.privateStorageOpen = openStorage == InterfaceID.RAIDS_STORAGE_PRIVATE;
 		state.separateSoloNeeds = config.separateSoloNeeds();
 		state.separateSoloChests = separateChests();
 		state.solo = solo();
