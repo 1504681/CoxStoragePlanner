@@ -63,6 +63,10 @@ The game only sends a storage's contents while its interface is open, so both st
 
 ## Changelog
 
+1.3.7
+- Gear to wear that isn't there no longer holds up the chest: a `wear` line with no more of its item on you or in the storage is skipped, so `wear Dragon arrow, 250` with 180 left moves on to the deposits and withdrawals.
+- *Copy my loadout* writes worn ammo without a number.
+
 1.3.6
 - Choices by priority: `Venator bow | *chinchompa & Twisted buckler` asks for the bow if you have one, on you or in the storage, and otherwise for the other two. `A | B` goes by the first you have as well, instead of lighting both.
 - Lines can be 100 characters, up from 60.

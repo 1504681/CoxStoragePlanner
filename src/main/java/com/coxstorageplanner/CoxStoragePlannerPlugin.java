@@ -75,7 +75,7 @@ import net.runelite.client.util.Text;
 public class CoxStoragePlannerPlugin extends Plugin implements CoxStoragePanel.Actions
 {
 	// keep in sync with build.gradle
-	public static final String VERSION = "1.3.6";
+	public static final String VERSION = "1.3.7";
 
 	/** Ticks outside before a raid counts as left, so a relog or a reload doesn't wipe the raid's state. */
 	private static final int LEAVE_TICKS = 5;
@@ -323,6 +323,10 @@ public class CoxStoragePlannerPlugin extends Plugin implements CoxStoragePanel.A
 		{
 			case InventoryID.INV:
 				inventoryChanged(event.getItemContainer().getItems());
+				inventoryDirty = true;
+				break;
+			case InventoryID.WORN:
+				// ammo used up or gear swapped changes the "wear" lines
 				inventoryDirty = true;
 				break;
 			case InventoryID.RAIDS_PRIVATESTORAGE:
@@ -1540,7 +1544,8 @@ public class CoxStoragePlannerPlugin extends Plugin implements CoxStoragePanel.A
 				for (Item item : container.getItems())
 				{
 					names.add(item.getId() > 0 ? itemName(item.getId()) : null);
-					quantities.add(item.getQuantity());
+					// worn ammo goes down as it's used: any of it on will do, so no number
+					quantities.add(containerId == InventoryID.WORN ? Math.min(1, item.getQuantity()) : item.getQuantity());
 				}
 				lines.addAll(ChestProgress.loadoutLines(names, quantities, containerId == InventoryID.WORN ? "wear " : ""));
 			}

@@ -17,7 +17,7 @@ import java.util.regex.Pattern;
  * is done when nothing is carried that the take-out list doesn't keep. A withdrawal is done when the
  * inventory and worn equipment together hold the number asked for; the same item on a later line asks
  * for that many more; one whose item is nowhere, not on you and not in the storage, is skipped. A "wear"
- * line is done once it's worn. An "A | B & C" line is settled first ({@link #settle}): the first choice
+ * line is done once it's worn, and skipped when there's no more of it to put on. An "A | B & C" line is settled first ({@link #settle}): the first choice
  * that's all to be had, and the others aren't asked for or kept. Potions light up fullest first. Numbers are quantities, so a stack of 14
  * juice counts as 14. Containers are maps of item name to quantity; a null storage is one the client
  * hasn't seen, so nothing is skipped for not being in it.
@@ -40,7 +40,7 @@ public final class ChestProgress
 		public final boolean done;
 		/** Position in the withdraw list, 1-based, 0 for deposits. */
 		public final int order;
-		/** A withdrawal skipped because the item is neither on you nor in the storage; done as well. */
+		/** A withdrawal or gear to wear skipped because no more of the item is on you or in the storage; done as well. */
 		public final boolean missing;
 		/** How many more still to move, so only that many light up; MAX_VALUE for all of them. */
 		public final int remaining;
@@ -254,7 +254,10 @@ public final class ChestProgress
 			if (line.wear)
 			{
 				int on = count(line, worn);
-				wears.add(new Step(line, false, on >= line.count, 0, line.count - on));
+				// no more of it to put on, carried or in the storage: skipped like a withdrawal that's nowhere,
+				// so arrows shot down below their number don't hold up everything after them
+				boolean missing = on < line.count && storage != null && count(line, inventory) == 0 && count(line, storage) == 0;
+				wears.add(new Step(line, false, on >= line.count || missing, 0, missing, line.count - on, 0, 0, false, 0, 0, 0));
 			}
 			carries |= !line.wear;
 		}

@@ -411,6 +411,44 @@ public class ChestPlanTest
 	}
 
 	@Test
+	public void gearThatIsNotThereIsSkipped()
+	{
+		ChestPlan plan = new ChestPlan("RAIDS_END#2", "Pre-Olm");
+		plan.getWithdraw().addAll(Arrays.asList("wear Dragon arrow, 250", "wear Scythe of vitur", "Overload"));
+		plan.setOrdered(true);
+		Map<String, Integer> none = Collections.emptyMap();
+		Map<String, Integer> worn = Collections.singletonMap("Dragon arrow", 180);
+		Map<String, Integer> storage = new java.util.HashMap<>(ChestProgress.tally(Arrays.asList("Overload (+)(4)")));
+		// arrows shot down to 180 and no more anywhere, no scythe either: on to the overload
+		ChestProgress progress = new ChestProgress(plan, none, worn, none, storage);
+		assertTrue(progress.wears.get(0).missing);
+		assertTrue(progress.wears.get(0).done);
+		assertTrue(progress.wears.get(1).missing);
+		assertEquals(ChestProgress.Phase.WITHDRAW, progress.phase());
+		assertNotNull(progress.highlightsWithdraw("Overload (+)(4)", 4));
+		assertFalse(progress.isDone());
+		assertTrue(new ChestProgress(plan, ChestProgress.tally(Arrays.asList("Overload (+)(4)")), worn, none, new java.util.HashMap<>()).isDone());
+
+		// more arrows in the storage: those light up to put on
+		storage.put("Dragon arrow", 100);
+		progress = new ChestProgress(plan, none, worn, none, storage);
+		assertFalse(progress.wears.get(0).done);
+		assertEquals(70, progress.wears.get(0).remaining);
+		assertEquals(ChestProgress.Phase.WEAR, progress.phase());
+		assertTrue(progress.highlightsWear("Dragon arrow"));
+		assertFalse(progress.highlightsWear("Scythe of vitur"));
+		// or carried
+		storage.remove("Dragon arrow");
+		Map<String, Integer> carried = Collections.singletonMap("Dragon arrow", 100);
+		assertEquals(ChestProgress.Phase.WEAR, new ChestProgress(plan, carried, worn, carried, storage).phase());
+
+		// a storage not seen yet: nothing is skipped for not being in it
+		progress = new ChestProgress(plan, none, worn, none, null);
+		assertFalse(progress.wears.get(0).missing);
+		assertFalse(progress.wears.get(0).done);
+	}
+
+	@Test
 	public void wearThenPutInThenTakeOut()
 	{
 		ChestPlan plan = new ChestPlan("RAIDS_END#2", "End 2");

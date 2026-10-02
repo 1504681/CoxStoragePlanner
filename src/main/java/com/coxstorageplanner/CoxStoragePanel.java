@@ -618,7 +618,8 @@ class CoxStoragePanel extends PluginPanel
 			}
 			for (ChestProgress.Step step : progress.wears)
 			{
-				chestSteps.addRow(stepRow((step.done ? "✓ " : "• ") + "wear: " + step.line.name, step.done ? GOOD : WEAR), 0);
+				chestSteps.addRow(stepRow((step.missing ? "– " : step.done ? "✓ " : "• ") + "wear: " + step.line.name
+					+ (step.missing ? " (not here)" : ""), step.missing ? MUTED : step.done ? GOOD : WEAR), 0);
 			}
 			for (ChestProgress.Step step : progress.deposits)
 			{
