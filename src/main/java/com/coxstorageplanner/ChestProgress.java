@@ -17,7 +17,8 @@ import java.util.regex.Pattern;
  * is done when nothing is carried that the take-out list doesn't keep. A withdrawal is done when the
  * inventory and worn equipment together hold the number asked for; the same item on a later line asks
  * for that many more; one whose item is nowhere, not on you and not in the storage, is skipped. A "wear"
- * line is done once it's worn. Potions light up fullest first. Numbers are quantities, so a stack of 14
+ * line is done once it's worn. An "A | B & C" line is settled first ({@link #settle}): the first choice
+ * that's all to be had, and the others aren't asked for or kept. Potions light up fullest first. Numbers are quantities, so a stack of 14
  * juice counts as 14. Containers are maps of item name to quantity; a null storage is one the client
  * hasn't seen, so nothing is skipped for not being in it.
  *
@@ -243,7 +244,7 @@ public final class ChestProgress
 		this.stackable = stackable;
 		this.free = carried == null ? -1 : carried.free;
 		Map<String, Integer> held = storage == null ? Collections.emptyMap() : storage;
-		List<ChestPlan.Line> takeOut = ChestPlan.parse(plan.getWithdraw());
+		List<ChestPlan.Line> takeOut = settle(ChestPlan.parse(plan.getWithdraw()), inventory, worn, storage);
 		this.takeOut = takeOut;
 		List<ChestPlan.Line> putIn = ChestPlan.parse(plan.getDeposit());
 		List<Step> wears = new ArrayList<>();
@@ -492,6 +493,56 @@ public final class ChestProgress
 		this.withdrawing = round;
 		this.blocked = stuck;
 		this.phase = !allDone(wears) ? Phase.WEAR : layout != null && layout.moving ? Phase.MOVE : round ? Phase.WITHDRAW : Phase.DEPOSIT;
+	}
+
+	/**
+	 * The take-out list with each "A | B & C" line turned into the items of one of its choices: the first
+	 * whose items are all to be had, on you or in the storage, in the numbers asked for. So with the bow
+	 * around, the chinchompas and the buckler of "Venator bow | *chinchompa & Twisted buckler" aren't asked
+	 * for, don't light up and aren't kept. With no choice complete, a line of single items under one count
+	 * ("Ayak | Sang* staff*") stays as it is and takes any of them; any other goes by the first choice
+	 * there's something of, or the very first. A storage the client hasn't seen counts as empty here.
+	 */
+	static List<ChestPlan.Line> settle(List<ChestPlan.Line> lines, Map<String, Integer> inventory, Map<String, Integer> worn,
+		Map<String, Integer> storage)
+	{
+		List<ChestPlan.Line> settled = new ArrayList<>();
+		for (ChestPlan.Line line : lines)
+		{
+			if (line.options.isEmpty() || line.everything || line.everythingElse)
+			{
+				settled.add(line);
+				continue;
+			}
+			List<ChestPlan.Line> complete = null;
+			List<ChestPlan.Line> begun = null;
+			for (List<ChestPlan.Line> option : line.options)
+			{
+				boolean all = true;
+				boolean any = false;
+				for (ChestPlan.Line item : option)
+				{
+					int have = count(item, inventory) + count(item, worn) + (storage == null ? 0 : count(item, storage));
+					all &= have >= item.count;
+					any |= have > 0;
+				}
+				if (all)
+				{
+					complete = option;
+					break;
+				}
+				begun = begun == null && any ? option : begun;
+			}
+			if (complete == null && line.either)
+			{
+				settled.add(line);
+			}
+			else
+			{
+				settled.addAll(complete != null ? complete : begun != null ? begun : line.options.get(0));
+			}
+		}
+		return settled;
 	}
 
 	/** Whether the take-out list keeps an item, so "everything else" leaves it alone. */

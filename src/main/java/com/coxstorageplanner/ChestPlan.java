@@ -9,7 +9,9 @@ import java.util.regex.Pattern;
  * What to do at one storage unit: things to put in and things to take out, in order.
  * A line is an item name, matched from its start so "Xeric's aid" covers every dose, or a pattern
  * with * and ? like "*chinchompa", with an optional count like "Stinkhorn mushroom, 3".
- * "Ayak | Sang* staff*" takes either; the count, if any, goes at the end and covers the lot.
+ * "Ayak | Sang* staff*" takes either, the first by preference; the count, if any, goes at the end and covers the lot.
+ * "Venator bow | *chinchompa & Twisted buckler" is the bow, or else the other two: "&" puts several items
+ * on a line, each with a count of its own if it wants one.
  * "everything" deposits it all, "everything else" deposits whatever the take-out list doesn't keep.
  * A take-out line starting with "wear" is gear to put on, done once it's worn.
  */
@@ -18,7 +20,7 @@ public final class ChestPlan
 	public static final String EVERYTHING = "everything";
 	public static final String EVERYTHING_ELSE = "everything else";
 	public static final int MAX_LINES = 40;
-	public static final int MAX_LINE = 60;
+	public static final int MAX_LINE = 100;
 
 	/** One line of a list, parsed. */
 	public static final class Line
@@ -33,10 +35,14 @@ public final class ChestPlan
 		public final boolean everythingElse;
 		/** A take-out that's done when the item is worn, not carried. */
 		public final boolean wear;
-		/** The names this line takes, one unless it says "A | B". */
+		/** The names this line takes, one unless it says "A | B" or "A & B". */
 		private final List<String> names;
 		/** Compiled forms of the names, null for a plain name; same order as names. */
 		private final List<Pattern> patterns;
+		/** The choices of an "A | B & C" line, the preferred one first, each as the items it takes; empty for a line of one item. */
+		final List<List<Line>> options;
+		/** Whether the choices are one item each under one count, so that any mix of them makes up the number. */
+		final boolean either;
 
 		Line(String text)
 		{
@@ -57,6 +63,7 @@ public final class ChestPlan
 				}
 			}
 			this.wear = wear;
+			String body = name;
 			int count = 1;
 			boolean counted = false;
 			// "Name, 3", or the older "Name x3"
@@ -77,28 +84,64 @@ public final class ChestPlan
 					// the comma or "x" was part of the name
 				}
 			}
+			String prefix = wear ? "wear " : "";
+			List<List<Line>> options = new ArrayList<>();
+			boolean either = false;
+			if (body.contains("|") || body.contains("&"))
+			{
+				// a count of its own on any item but the last, or an "&": the counts are each item's own
+				boolean own = body.contains("&");
+				String[] choices = body.split("\\|");
+				for (int i = 0; i < choices.length - 1 && !own; i++)
+				{
+					own = new Line(choices[i].trim()).counted;
+				}
+				either = !own;
+				for (String choice : (own ? body : name).split("\\|"))
+				{
+					List<Line> items = new ArrayList<>();
+					for (String item : choice.split("&"))
+					{
+						if (!item.trim().isEmpty())
+						{
+							items.add(new Line(prefix + item.trim() + (counted && !own ? ", " + count : "")));
+						}
+					}
+					if (!items.isEmpty())
+					{
+						options.add(items);
+					}
+				}
+				if (own)
+				{
+					name = body;
+					count = 1;
+					counted = false;
+				}
+			}
+			this.options = options;
+			this.either = either;
 			this.name = name;
 			this.count = count;
 			this.counted = counted;
 			names = new ArrayList<>();
 			patterns = new ArrayList<>();
-			for (String alt : name.split("\\s*\\|\\s*"))
+			for (List<Line> items : options)
 			{
-				alt = alt.trim();
-				if (!alt.isEmpty())
+				for (Line item : items)
 				{
-					names.add(alt);
-					patterns.add(alt.contains("*") || alt.contains("?") ? glob(alt) : null);
+					names.add(item.name);
+					patterns.add(item.patterns.get(0));
 				}
 			}
 			if (names.isEmpty())
 			{
 				names.add(name);
-				patterns.add(null);
+				patterns.add(name.contains("*") || name.contains("?") ? glob(name) : null);
 			}
 		}
 
-		/** Whether the line is a plain name: no wildcards, no "|". */
+		/** Whether the line is a plain name: no wildcards, no "|", no "&". */
 		boolean plain()
 		{
 			return names.size() == 1 && patterns.get(0) == null;
@@ -226,7 +269,7 @@ public final class ChestPlan
 
 	/**
 	 * Adds to or takes from the line for an item, keeping the count in the "Name, N" suffix.
-	 * Only a plain line for the item's base name is touched, never a wildcard or an "A | B"; the line is
+	 * Only a plain line for the item's base name is touched, never a wildcard, an "A | B" or an "A & B"; the line is
 	 * added at the end when there is none and dropped when its count reaches zero.
 	 *
 	 * @return whether the lines changed

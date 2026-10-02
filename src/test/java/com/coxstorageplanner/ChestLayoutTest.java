@@ -231,6 +231,27 @@ public class ChestLayoutTest
 	}
 
 	@Test
+	public void aLineOfChoicesTakesTheSlotsOfTheOneChosen()
+	{
+		ChestPlan plan = plan("everything else", "Twisted bow", "Venator bow | *chinchompa & Twisted buckler", "Overload");
+		Set<String> stacks = Collections.singleton("Black chinchompa");
+		// the venator bow is in the storage: one slot for it, and the buckler carried goes in
+		Game game = new Game(plan, 25, stacks, "Twisted buckler").store("Twisted bow", 1).store("Venator bow", 1)
+			.store("Black chinchompa", 400).store("Overload (+)(4)", 1);
+		ChestProgress progress = game.play();
+		assertTrue(progress.isDone());
+		assertEquals(Arrays.asList("Twisted bow", "Venator bow", "Overload (+)(4)"), game.carried());
+		assertEquals(Integer.valueOf(1), game.storage.get("Twisted buckler"));
+
+		// no venator bow: the chinchompas and the buckler, a slot each
+		game = new Game(plan, 25, stacks, "Twisted buckler").store("Twisted bow", 1)
+			.store("Black chinchompa", 400).store("Overload (+)(4)", 1);
+		progress = game.play();
+		assertTrue(progress.isDone());
+		assertEquals(Arrays.asList("Twisted bow", "Black chinchompa", "Twisted buckler", "Overload (+)(4)"), game.carried());
+	}
+
+	@Test
 	public void aClickKeepsItsNumber()
 	{
 		ChestPlan plan = plan("everything else", "Twisted bow", "Dragon claws", "Xeric's aid, 3", "Overload", "Lockpick", "Book of the dead");

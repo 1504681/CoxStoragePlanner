@@ -75,7 +75,7 @@ import net.runelite.client.util.Text;
 public class CoxStoragePlannerPlugin extends Plugin implements CoxStoragePanel.Actions
 {
 	// keep in sync with build.gradle
-	public static final String VERSION = "1.3.5";
+	public static final String VERSION = "1.3.6";
 
 	/** Ticks outside before a raid counts as left, so a relog or a reload doesn't wipe the raid's state. */
 	private static final int LEAVE_TICKS = 5;
@@ -1707,13 +1707,21 @@ public class CoxStoragePlannerPlugin extends Plugin implements CoxStoragePanel.A
 				}
 				int best = known == null ? -1 : known;
 				int bestDose = knownName == null ? -2 : ChestProgress.dose(knownName);
-				for (Map.Entry<Integer, String> e : itemNames.entrySet())
+				// a line of choices shows its first item, or failing that whichever of them has been seen
+				for (ChestPlan.Line shown : line.options.isEmpty() ? Collections.singletonList(line) : Arrays.asList(line.options.get(0).get(0), line))
 				{
-					int dose = ChestProgress.dose(e.getValue());
-					if (line.matches(e.getValue()) && (dose > bestDose || (dose == bestDose && e.getKey() < best)))
+					for (Map.Entry<Integer, String> e : itemNames.entrySet())
 					{
-						best = e.getKey();
-						bestDose = dose;
+						int dose = ChestProgress.dose(e.getValue());
+						if (shown.matches(e.getValue()) && (dose > bestDose || (dose == bestDose && e.getKey() < best)))
+						{
+							best = e.getKey();
+							bestDose = dose;
+						}
+					}
+					if (best > 0)
+					{
+						break;
 					}
 				}
 				if (best > 0 && (known == null || best != known))

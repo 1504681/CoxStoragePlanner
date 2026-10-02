@@ -476,6 +476,108 @@ public class ChestPlanTest
 	}
 
 	@Test
+	public void theFirstChoiceToBeHadIsTheOneAskedFor()
+	{
+		ChestPlan.Line line = ChestPlan.parse(Arrays.asList("Venator bow | *chinchompa & Twisted buckler")).get(0);
+		assertEquals(2, line.options.size());
+		assertEquals(1, line.options.get(0).size());
+		assertEquals(2, line.options.get(1).size());
+		assertFalse(line.either);
+		assertFalse(line.plain());
+		assertTrue(line.matches("Venator bow"));
+		assertTrue(line.matches("Black chinchompa"));
+		assertTrue(line.matches("Twisted buckler"));
+
+		ChestPlan plan = new ChestPlan("RAIDS_END#1", "Pre-Vanguards");
+		plan.getDeposit().add("everything else");
+		plan.getWithdraw().addAll(Arrays.asList("Twisted bow", "Venator bow | *chinchompa & Twisted buckler", "Overload"));
+		Map<String, Integer> none = Collections.emptyMap();
+		Map<String, Integer> storage = new java.util.LinkedHashMap<>(ChestProgress.tally(Arrays.asList("Twisted bow", "Venator bow",
+			"Twisted buckler", "Overload (+)(4)")));
+		storage.put("Black chinchompa", 400);
+		// the bow is there: the chinchompas and the buckler aren't asked for, whatever the storage holds
+		ChestProgress progress = new ChestProgress(plan, none, none, none, storage);
+		assertEquals(3, progress.withdrawals.size());
+		assertEquals("Venator bow", progress.withdrawals.get(1).line.text);
+		assertFalse((progress.highlightsWithdraw("Twisted buckler", 99) != null));
+		assertFalse((progress.highlightsWithdraw("Black chinchompa", 99) != null));
+		assertTrue((progress.highlightsWithdraw("Venator bow", 99) != null));
+		// nor kept: a buckler carried goes in with everything else
+		Map<String, Integer> buckler = ChestProgress.tally(Arrays.asList("Twisted buckler"));
+		progress = new ChestProgress(plan, buckler, none, buckler, storage);
+		assertFalse(progress.deposits.get(0).done);
+		// carried or worn counts as there to be had
+		Map<String, Integer> bow = ChestProgress.tally(Arrays.asList("Venator bow"));
+		storage.remove("Venator bow");
+		progress = new ChestProgress(plan, none, bow, none, storage);
+		assertEquals(3, progress.withdrawals.size());
+		assertTrue(progress.withdrawals.get(1).done);
+		assertFalse((progress.highlightsWithdraw("Twisted buckler", 99) != null));
+
+		// no bow anywhere: the other two, each a step of its own, and the buckler is kept
+		progress = new ChestProgress(plan, buckler, none, buckler, storage);
+		assertEquals(4, progress.withdrawals.size());
+		assertEquals("*chinchompa", progress.withdrawals.get(1).line.text);
+		assertEquals("Twisted buckler", progress.withdrawals.get(2).line.text);
+		assertTrue(progress.withdrawals.get(2).done);
+		assertTrue(progress.deposits.get(0).done);
+		assertTrue((progress.highlightsWithdraw("Black chinchompa", 99) != null));
+
+		// a choice that's there only in part comes second to one that's whole, and first when none is
+		storage.remove("Twisted buckler");
+		progress = new ChestProgress(plan, none, none, none, storage);
+		assertEquals(4, progress.withdrawals.size());
+		assertTrue(progress.withdrawals.get(2).missing);
+		// a storage not seen yet: the first choice
+		progress = new ChestProgress(plan, none, none, none, null);
+		assertEquals(3, progress.withdrawals.size());
+		assertEquals("Venator bow", progress.withdrawals.get(1).line.text);
+	}
+
+	@Test
+	public void choicesKeepTheirCountsAndTheirWear()
+	{
+		// with an "&" each item has a count of its own
+		ChestPlan.Line line = ChestPlan.parse(Arrays.asList("Venator bow | Black chinchompa, 500 & Twisted buckler")).get(0);
+		assertEquals(1, line.count);
+		assertFalse(line.counted);
+		assertEquals(500, line.options.get(1).get(0).count);
+		assertEquals(1, line.options.get(1).get(1).count);
+		assertTrue(line.matches("Black chinchompa"));
+		// without one, the count at the end covers every choice
+		ChestPlan.Line either = ChestPlan.parse(Arrays.asList("Xeric's aid | Revitalisation, 3")).get(0);
+		assertTrue(either.either);
+		assertEquals(3, either.count);
+		assertEquals(3, either.options.get(0).get(0).count);
+		assertEquals(3, either.options.get(1).get(0).count);
+		ChestPlan.Line worn = ChestPlan.parse(Arrays.asList("wear Torva full helm | Neitiznot faceguard & Amulet of fury")).get(0);
+		assertTrue(worn.wear);
+		assertTrue(worn.options.get(1).get(1).wear);
+		assertEquals("Amulet of fury", worn.options.get(1).get(1).name);
+
+		ChestPlan plan = new ChestPlan("RAIDS_END#1", "Pre-Vanguards");
+		plan.getWithdraw().add("Xeric's aid | Revitalisation, 3");
+		Map<String, Integer> none = Collections.emptyMap();
+		// three aids there: only the aids, though the revitalisations are there too
+		ChestProgress progress = new ChestProgress(plan, none, none, none, ChestProgress.tally(Arrays.asList("Xeric's aid(4)",
+			"Xeric's aid(4)", "Xeric's aid(4)", "Revitalisation(4)", "Revitalisation(4)", "Revitalisation(4)")));
+		assertTrue((progress.highlightsWithdraw("Xeric's aid(4)", 99) != null));
+		assertFalse((progress.highlightsWithdraw("Revitalisation(4)", 99) != null));
+		// two aids, three revitalisations: the revitalisations
+		progress = new ChestProgress(plan, none, none, none, ChestProgress.tally(Arrays.asList("Xeric's aid(4)",
+			"Xeric's aid(4)", "Revitalisation(4)", "Revitalisation(4)", "Revitalisation(4)")));
+		assertFalse((progress.highlightsWithdraw("Xeric's aid(4)", 99) != null));
+		assertTrue((progress.highlightsWithdraw("Revitalisation(4)", 99) != null));
+		// neither makes three: any mix of them, as before
+		progress = new ChestProgress(plan, none, none, none, ChestProgress.tally(Arrays.asList("Xeric's aid(4)",
+			"Xeric's aid(4)", "Revitalisation(4)", "Revitalisation(4)")));
+		assertEquals(1, progress.withdrawals.size());
+		assertTrue((progress.highlightsWithdraw("Xeric's aid(4)", 99) != null));
+		assertTrue((progress.highlightsWithdraw("Revitalisation(4)", 99) != null));
+		assertEquals(3, progress.withdrawals.get(0).remaining);
+	}
+
+	@Test
 	public void wearLinesParse()
 	{
 		ChestPlan.Line line = ChestPlan.parse(Arrays.asList("wear Scythe of vitur")).get(0);
