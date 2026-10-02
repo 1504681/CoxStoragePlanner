@@ -75,7 +75,7 @@ import net.runelite.client.util.Text;
 public class CoxStoragePlannerPlugin extends Plugin implements CoxStoragePanel.Actions
 {
 	// keep in sync with build.gradle
-	public static final String VERSION = "1.3.4";
+	public static final String VERSION = "1.3.5";
 
 	/** Ticks outside before a raid counts as left, so a relog or a reload doesn't wipe the raid's state. */
 	private static final int LEAVE_TICKS = 5;
@@ -186,6 +186,9 @@ public class CoxStoragePlannerPlugin extends Plugin implements CoxStoragePanel.A
 	/** Whether the open storage is in a round of withdrawals: it was too full to take more, so things come out first. */
 	private boolean withdrawing;
 	private boolean looseRound;
+	/** What the click numbers of the open storage leave out, so a click keeps its number; null to start over. */
+	private boolean[] numberedFrom;
+	private String numberedChest;
 	/** Free slots of the open storage as last worked out, to notice when the interface fills its numbers in. */
 	private int lastFree = -1;
 	/** Slots of the private storage as last seen open this raid, to know its room while it's shut; -1 for unknown. */
@@ -285,6 +288,7 @@ public class CoxStoragePlannerPlugin extends Plugin implements CoxStoragePanel.A
 		openStorage = 0;
 		withdrawing = false;
 		looseRound = false;
+		numberedFrom = null;
 		privateCapacity = -1;
 		shutChest = null;
 		shutChestKey = null;
@@ -361,6 +365,7 @@ public class CoxStoragePlannerPlugin extends Plugin implements CoxStoragePanel.A
 			openStorage = event.getGroupId();
 			withdrawing = false;
 			looseRound = false;
+			numberedFrom = null;
 			synchronized (lock)
 			{
 				openedWith = inventoryItems;
@@ -1208,10 +1213,16 @@ public class CoxStoragePlannerPlugin extends Plugin implements CoxStoragePanel.A
 		ItemContainer storage = client.getItemContainer(openStorage == InterfaceID.RAIDS_STORAGE_SHARED
 			? InventoryID.RAIDS_SHAREDSTORAGE : InventoryID.RAIDS_PRIVATESTORAGE);
 		lastFree = storageFree();
+		if (!plan.getKey().equals(numberedChest))
+		{
+			numberedFrom = null;
+			numberedChest = plan.getKey();
+		}
 		ChestProgress progress = new ChestProgress(plan, items, worn, before, tally(storage), config.chestPutBack(), stackableNames,
-			slots.with(lastFree, withdrawing, looseRound));
+			slots.with(lastFree, withdrawing, looseRound, numberedFrom));
 		withdrawing = progress.withdrawing;
 		looseRound = progress.loose();
+		numberedFrom = progress.numbered();
 		openChest = progress;
 	}
 

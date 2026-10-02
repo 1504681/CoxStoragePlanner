@@ -157,7 +157,7 @@ public interface CoxStoragePlannerConfig extends Config
 	@ConfigItem(
 		keyName = "chestGlowLastColor",
 		name = "End colour",
-		description = "Colour of an ordered withdrawal's last click. The clicks in between shade from the glow colour to this one, so the colour shows how far along the list is",
+		description = "Colour of the last click lit of an ordered withdrawal. The clicks lit shade from the glow colour on the next one to this one, so the colour shows how soon a click comes",
 		section = chestSection,
 		position = 8
 	)

@@ -29,6 +29,7 @@ public class ChestLayoutTest
 		final int capacity;
 		boolean withdrawing;
 		boolean loose;
+		boolean[] numbered;
 		int deposits;
 		int withdrawals;
 		int drags;
@@ -81,9 +82,10 @@ public class ChestLayoutTest
 		{
 			Map<String, Integer> inventory = inventory();
 			ChestProgress progress = new ChestProgress(plan, inventory, Collections.emptyMap(), inventory, new HashMap<>(storage),
-				true, stackable, new ChestProgress.Carried(slots.clone(), quantities.clone(), capacity < 0 ? -1 : capacity - used(), withdrawing, loose));
+				true, stackable, new ChestProgress.Carried(slots.clone(), quantities.clone(), capacity < 0 ? -1 : capacity - used(), withdrawing, loose, numbered));
 			withdrawing = progress.withdrawing;
 			loose = progress.loose();
+			numbered = progress.numbered();
 			return progress;
 		}
 
@@ -226,6 +228,67 @@ public class ChestLayoutTest
 			"Book of the dead", "Rune pouch"), game.carried());
 		assertEquals(1, game.deposits);
 		assertEquals(0, game.drags);
+	}
+
+	@Test
+	public void aClickKeepsItsNumber()
+	{
+		ChestPlan plan = plan("everything else", "Twisted bow", "Dragon claws", "Xeric's aid, 3", "Overload", "Lockpick", "Book of the dead");
+		Game game = new Game(plan, 25, Collections.emptySet(), "Twisted bow", "Dragon claws", "Xeric's aid(4)", null, null, "Overload (+)(4)")
+			.store("Xeric's aid(4)", 4).store("Book of the dead", 1);
+		// clicks 4, 5 and 7 of the list are the ones to make: they read 1, 2 and 3
+		ChestProgress progress = game.progress();
+		assertEquals(3, progress.toClick());
+		assertEquals(1, progress.number(progress.queue().get(0).number));
+		assertEquals(2, progress.number(progress.queue().get(1).number));
+		assertEquals(3, progress.number(progress.queue().get(2).number));
+		assertEquals(1, progress.number(progress.withdrawals.get(2)));
+		assertEquals(3, progress.number(progress.withdrawals.get(5)));
+
+		// the first one made, the other two are still 2 and 3
+		game.withdraw("Xeric's aid(4)", 1);
+		progress = game.progress();
+		assertEquals(2, progress.toClick());
+		assertEquals(0, progress.queue().get(0).step.rank);
+		assertEquals(2, progress.number(progress.queue().get(0).number));
+		assertEquals(3, progress.number(progress.queue().get(1).number));
+		assertEquals(2, progress.number(progress.withdrawals.get(2)));
+
+		// the storage opened again counts from the next click
+		game.numbered = null;
+		progress = game.progress();
+		assertEquals(1, progress.number(progress.queue().get(0).number));
+		assertEquals(2, progress.number(progress.queue().get(1).number));
+
+		// the same going by counts
+		Map<String, Integer> inventory = new LinkedHashMap<>();
+		inventory.put("Twisted bow", 1);
+		inventory.put("Xeric's aid(4)", 1);
+		Map<String, Integer> storage = new HashMap<>();
+		storage.put("Dragon claws", 1);
+		storage.put("Xeric's aid(4)", 2);
+		storage.put("Book of the dead", 1);
+		ChestProgress.Carried carried = new ChestProgress.Carried(new String[SLOTS], new int[SLOTS], -1, false);
+		ChestProgress counts = new ChestProgress(plan, inventory, Collections.emptyMap(), inventory, storage, false, Collections.emptySet(), carried);
+		assertEquals(4, counts.toClick());
+		assertEquals(1, counts.number(counts.withdrawals.get(1)));
+		assertEquals(2, counts.number(counts.withdrawals.get(2)));
+		assertEquals(4, counts.number(counts.withdrawals.get(5)));
+		inventory.put("Dragon claws", 1);
+		storage.remove("Dragon claws");
+		counts = new ChestProgress(plan, inventory, Collections.emptyMap(), inventory, storage, false, Collections.emptySet(),
+			carried.with(-1, false, false, counts.numbered()));
+		assertEquals(3, counts.toClick());
+		assertEquals(2, counts.number(counts.withdrawals.get(2)));
+		assertEquals(4, counts.number(counts.withdrawals.get(5)));
+
+		// a click the numbers left out undone since: they start over rather than run past the list
+		inventory.remove("Twisted bow");
+		storage.put("Twisted bow", 1);
+		counts = new ChestProgress(plan, inventory, Collections.emptyMap(), inventory, storage, false, Collections.emptySet(),
+			carried.with(-1, false, false, counts.numbered()));
+		assertEquals(1, counts.number(counts.withdrawals.get(0)));
+		assertEquals(2, counts.number(counts.withdrawals.get(2)));
 	}
 
 	@Test

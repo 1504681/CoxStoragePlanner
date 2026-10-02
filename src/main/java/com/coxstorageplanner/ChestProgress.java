@@ -104,6 +104,8 @@ public final class ChestProgress
 		final boolean withdrawing;
 		/** Whether that round was of withdrawals into whatever slots were empty ({@link ChestProgress#loose}). */
 		final boolean loose;
+		/** The clicks the numbers leave out ({@link ChestProgress#numbered}), null to number from the next click. */
+		final boolean[] numbered;
 
 		public Carried(String[] names, int[] quantities, int free, boolean withdrawing)
 		{
@@ -112,11 +114,17 @@ public final class ChestProgress
 
 		public Carried(String[] names, int[] quantities, int free, boolean withdrawing, boolean loose)
 		{
+			this(names, quantities, free, withdrawing, loose, null);
+		}
+
+		public Carried(String[] names, int[] quantities, int free, boolean withdrawing, boolean loose, boolean[] numbered)
+		{
 			this.names = names;
 			this.quantities = quantities;
 			this.free = free;
 			this.withdrawing = withdrawing;
 			this.loose = loose;
+			this.numbered = numbered;
 		}
 
 		public Carried(List<String> names)
@@ -126,7 +134,12 @@ public final class ChestProgress
 
 		public Carried with(int free, boolean withdrawing, boolean loose)
 		{
-			return new Carried(names, quantities, free, withdrawing, loose);
+			return new Carried(names, quantities, free, withdrawing, loose, numbered);
+		}
+
+		public Carried with(int free, boolean withdrawing, boolean loose, boolean[] numbered)
+		{
+			return new Carried(names, quantities, free, withdrawing, loose, numbered);
 		}
 
 		private static int[] ones(int n)
@@ -180,6 +193,10 @@ public final class ChestProgress
 	/** With a layout, the same plan going by counts alone: what's carried, whatever slot it's in. */
 	private final ChestProgress counts;
 	private final Set<String> stackable;
+	/** Per click of the plan, from 1, whether it was made already when the numbering began. */
+	private final boolean[] numbered;
+	/** How many withdrawals can be made now, one after the other. */
+	private final int toClick;
 
 	public ChestProgress(ChestPlan plan, Map<String, Integer> inventory)
 	{
@@ -277,6 +294,8 @@ public final class ChestProgress
 		List<Step> withdrawals = new ArrayList<>();
 		List<String> outOfOrder = new ArrayList<>();
 		List<Click> queue = new ArrayList<>();
+		// the clicks of the plan, from 1, that are made already
+		java.util.BitSet madeClicks = new java.util.BitSet();
 		if (layout != null)
 		{
 			for (int j = 0; j < putIn.size(); j++)
@@ -350,6 +369,11 @@ public final class ChestProgress
 				queue.add(new Click(byLine[layout.entries.get(k).index], k + 1));
 			}
 			this.clicks = layout.entries.size();
+			this.toClick = layout.queue.size();
+			for (int k = 0; k < layout.entries.size(); k++)
+			{
+				madeClicks.set(k + 1, layout.placed[k] && layout.shortBy[k] == 0);
+			}
 		}
 		else
 		{
@@ -385,10 +409,12 @@ public final class ChestProgress
 				int made = stack ? (done ? 1 : 0) : got;
 				withdrawals.add(new Step(line, false, done || missing, ++order, missing, remaining, clicks + made + 1, pending, stack,
 					clicks + 1, mine, mine - made));
+				madeClicks.set(clicks + 1, clicks + 1 + made);
 				clicks += mine;
 				pending += mine - made;
 			}
 			this.clicks = clicks;
+			this.toClick = pending;
 			if (putBack && plan.isOrdered())
 			{
 				int next = 0;
@@ -421,6 +447,19 @@ public final class ChestProgress
 		this.withdrawals = Collections.unmodifiableList(withdrawals);
 		this.outOfOrder = Collections.unmodifiableList(outOfOrder);
 		this.queue = Collections.unmodifiableList(queue);
+		boolean[] done = new boolean[this.clicks + 1];
+		for (int click = 1; click < done.length; click++)
+		{
+			done[click] = madeClicks.get(click);
+		}
+		// the numbers stay as they were handed in while that still fits: the same list, and nothing it left out undone since
+		boolean[] from = carried == null ? null : carried.numbered;
+		boolean fits = from != null && from.length == done.length;
+		for (int click = 1; fits && click < done.length; click++)
+		{
+			fits = !from[click] || done[click];
+		}
+		this.numbered = fits ? from : done;
 
 		boolean round;
 		boolean stuck;
@@ -781,6 +820,48 @@ public final class ChestProgress
 	public String moveName()
 	{
 		return nameAt(moveFrom());
+	}
+
+	/**
+	 * The number a click of the plan is shown with. The clicks still to make when the storage was opened
+	 * count from 1, and each keeps its number while the ones before it get made, so what's lit reads
+	 * 1 2 3 4, then 2 3 4 5.
+	 *
+	 * @param click its place in the whole plan, from 1
+	 */
+	public int number(int click)
+	{
+		int number = click;
+		for (int before = 1; before < click && before < numbered.length; before++)
+		{
+			number -= numbered[before] ? 1 : 0;
+		}
+		return number;
+	}
+
+	/** The number of a withdrawal step's next click. */
+	public int number(Step step)
+	{
+		for (Click click : queue)
+		{
+			if (click.step == step)
+			{
+				return number(click.number);
+			}
+		}
+		return number(step.click);
+	}
+
+	/** What the numbers leave out, to hand back in with the next {@link Carried} so they stay as they are. */
+	public boolean[] numbered()
+	{
+		return numbered;
+	}
+
+	/** How many withdrawals can be made now, one after the other. */
+	public int toClick()
+	{
+		return phase == Phase.WITHDRAW ? toClick : 0;
 	}
 
 	/** With the plan held to the slot: the withdrawals that can be made now, in click order. Empty in any other phase. */

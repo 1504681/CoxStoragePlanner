@@ -601,8 +601,8 @@ class CoxStoragePanel extends PluginPanel
 				: !state.storageOpen ? null
 				: phase == ChestProgress.Phase.WEAR ? "Now: put on the outlined gear"
 				: phase == ChestProgress.Phase.DEPOSIT ? "Now: deposit what's outlined"
-				: progress.loose() ? "Now: withdraw 1, 2, 3... then drag them"
-				: plan.isOrdered() ? "Now: withdraw 1, 2, 3..." : "Now: withdraw what's outlined";
+				: progress.loose() ? "Now: withdraw by the numbers, then drag them"
+				: plan.isOrdered() ? "Now: withdraw by the numbers" : "Now: withdraw what's outlined";
 			if (now != null)
 			{
 				chestSteps.addRow(stepRow(now, WARN), 0);
@@ -633,10 +633,10 @@ class CoxStoragePanel extends PluginPanel
 			for (ChestProgress.Step step : progress.withdrawals)
 			{
 				String prefix = step.missing ? "– " : step.done ? "✓ " : step == next && taking ? "→ " : "• ";
-				// numbered like the orbs in the storage: the clicks to make now, from 1; nothing for one that's done or has to wait
-				int from = step.rank + 1;
+				// numbered like the orbs in the storage; nothing for one that's done or has to wait
+				int from = progress.number(step);
 				String number = !taking || step.done || step.now == 0 || step.rank == Integer.MAX_VALUE ? ""
-					: step.now == 1 ? from + ". " : from + "-" + (step.rank + step.now) + ". ";
+					: step.now == 1 ? from + ". " : from + "-" + (from + step.now - 1) + ". ";
 				chestSteps.addRow(stepRow(prefix + (plan.isOrdered() ? number : "withdraw: ") + step.line.text
 					+ (step.missing ? " (not here)" : ""),
 					step.missing ? MUTED : step.done ? GOOD : step == next ? WARN : Color.WHITE), 0);

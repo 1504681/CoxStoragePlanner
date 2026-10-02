@@ -303,12 +303,13 @@ class ChestItemOverlay extends WidgetItemOverlay
 			color = config.chestGlowColor();
 			if (ordered)
 			{
-				// numbered from the next click, so what's left always reads 1, 2, 3
-				order = rank + 1;
-				// the colour says how far along the list is
-				if (progress.clicks > 1)
+				// a click keeps its number while the ones before it get made: 1 2 3 4, then 2 3 4 5
+				order = progress.number(click.number);
+				// the colour says how soon: the glow colour on the next click, the end colour on the last one lit
+				int shown = Math.min(limit, progress.toClick());
+				if (shown > 1)
 				{
-					color = blend(color, config.chestGlowLastColor(), (click.number - 1) / (float) (progress.clicks - 1));
+					color = blend(color, config.chestGlowLastColor(), Math.min(1f, rank / (float) (shown - 1)));
 				}
 				if (mode == ChestGlow.NEXT_FOUR)
 				{
