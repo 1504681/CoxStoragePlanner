@@ -332,8 +332,9 @@ class ChestItemOverlay extends WidgetItemOverlay
 		}
 		Rectangle bounds = widgetItem.getCanvasBounds();
 		BufferedImage outline = itemManager.getItemOutline(itemId, widgetItem.getQuantity(), color);
-		// thicker is the same outline again, shifted a pixel each way; half a pixel is one at half strength
-		double width = Math.max(1, Math.min(4, config.chestGlowWidth()));
+		// thicker is the same outline again, shifted a pixel each way; half a pixel is one at half strength;
+		// gear to put on gets a pixel more, so it stands out from what's merely to be moved
+		double width = Math.max(1, Math.min(4, config.chestGlowWidth())) + (wear != null ? 1 : 0);
 		int reach = (int) Math.ceil(width - 1);
 		Composite composite = graphics.getComposite();
 		for (int dx = -reach; dx <= reach; dx++)

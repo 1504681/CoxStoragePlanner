@@ -170,13 +170,13 @@ public interface CoxStoragePlannerConfig extends Config
 	@ConfigItem(
 		keyName = "chestWearColor",
 		name = "Wear colour",
-		description = "Outline of gear still to put on, in the storage and the inventory",
+		description = "Outline of gear still to put on, in the storage and the inventory; drawn a pixel heavier than the rest",
 		section = chestSection,
 		position = 9
 	)
 	default Color chestWearColor()
 	{
-		return new Color(190, 90, 255, 230);
+		return new Color(195, 60, 255, 255);
 	}
 
 	@ConfigItem(

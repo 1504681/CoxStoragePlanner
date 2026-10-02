@@ -63,6 +63,9 @@ The game only sends a storage's contents while its interface is open, so both st
 
 ## Changelog
 
+1.3.8
+- Gear to wear glows stronger: a deeper purple at full strength by default, and its outline is a pixel heavier than the others.
+
 1.3.7
 - Gear to wear that isn't there no longer holds up the chest: a `wear` line with no more of its item on you or in the storage is skipped, so `wear Dragon arrow, 250` with 180 left moves on to the deposits and withdrawals.
 - *Copy my loadout* writes worn ammo without a number.
