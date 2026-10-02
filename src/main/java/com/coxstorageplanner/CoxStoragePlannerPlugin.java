@@ -8,6 +8,7 @@ import java.awt.RenderingHints;
 import java.awt.image.BufferedImage;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collection;
 import java.util.Collections;
 import java.util.Comparator;
 import java.util.HashMap;
@@ -74,7 +75,7 @@ import net.runelite.client.util.Text;
 public class CoxStoragePlannerPlugin extends Plugin implements CoxStoragePanel.Actions
 {
 	// keep in sync with build.gradle
-	public static final String VERSION = "1.3.3";
+	public static final String VERSION = "1.3.4";
 
 	/** Ticks outside before a raid counts as left, so a relog or a reload doesn't wipe the raid's state. */
 	private static final int LEAVE_TICKS = 5;
@@ -941,22 +942,9 @@ public class CoxStoragePlannerPlugin extends Plugin implements CoxStoragePanel.A
 					key = roomKeys.get(lastRoomSlot);
 				}
 			}
-			if (key == null && FLOOR_ROOMS.contains(room) && floor(world.getPlane()) > 0)
-			{
-				// one per floor, so the floor is the number whatever order the plugin saw them in
-				key = room + "#" + floor(world.getPlane());
-			}
 			if (key == null)
 			{
-				int n = 1;
-				for (String seen : new HashSet<>(roomKeys.values()))
-				{
-					if (seen.startsWith(room + "#"))
-					{
-						n++;
-					}
-				}
-				key = room + "#" + n;
+				key = roomKey(room, world.getPlane(), roomKeys.values());
 			}
 			roomKeys.put(slot, key);
 		}
@@ -968,7 +956,36 @@ public class CoxStoragePlannerPlugin extends Plugin implements CoxStoragePanel.A
 		}
 	}
 
-	/** Room templates a Challenge Mode raid has more than one of, so the first is "End 1" not "End". */
+	/**
+	 * The chest key for a room walked into for the first time this raid. A raid has one of most rooms, so
+	 * those are always #1 however the room was come into; End and Farming go by floor; only the
+	 * scavengers are numbered by the order they were seen in.
+	 *
+	 * @param seen the keys given out so far this raid
+	 */
+	static String roomKey(String room, int plane, Collection<String> seen)
+	{
+		if (FLOOR_ROOMS.contains(room) && floor(plane) > 0)
+		{
+			// one per floor, so the floor is the number whatever order the plugin saw them in
+			return room + "#" + floor(plane);
+		}
+		if (!REPEATED_ROOMS.contains(room))
+		{
+			return room + "#1";
+		}
+		int n = 1;
+		for (String key : new HashSet<>(seen))
+		{
+			if (key.startsWith(room + "#"))
+			{
+				n++;
+			}
+		}
+		return room + "#" + n;
+	}
+
+	/** Room templates a raid can have more than one of, so the first is "End 1" not "End". */
 	private static final Set<String> REPEATED_ROOMS = new HashSet<>(Arrays.asList(
 		"RAIDS_END", "RAIDS_FARMING", "RAIDS_SCAVENGERS"));
 
@@ -1029,11 +1046,13 @@ public class CoxStoragePlannerPlugin extends Plugin implements CoxStoragePanel.A
 
 	/**
 	 * Moves chests saved under the old per-layout keys (RAIDS_FARMING2#1) to the room's key, dropping
-	 * them if it's taken, and gives chests still carrying an old default name the current one.
+	 * them if it's taken, and gives chests still carrying an old default name the current one. A second
+	 * chest of a room a raid has one of ("Ice Demon 2", made by 1.3.3 and before) becomes the room's
+	 * chest, or goes if that exists and it's empty.
 	 */
 	private void migrateChestKeys(ChestBook chests)
 	{
-		boolean changed = false;
+		boolean changed = straySecondChests(chests);
 		for (ChestPlan plan : chests.all())
 		{
 			if ((plan.getName().equals("End 1") || plan.getName().equals("End 2") || plan.getName().equals("End"))
@@ -1061,6 +1080,37 @@ public class CoxStoragePlannerPlugin extends Plugin implements CoxStoragePanel.A
 		{
 			saveChests();
 		}
+	}
+
+	/** Whether anything changed. */
+	static boolean straySecondChests(ChestBook chests)
+	{
+		boolean changed = false;
+		for (ChestPlan plan : chests.all())
+		{
+			String[] parts = plan.getKey().split("#", 2);
+			if (parts.length != 2 || parts[1].equals("1") || !ROOMS.containsValue(parts[0]) || REPEATED_ROOMS.contains(parts[0]))
+			{
+				continue;
+			}
+			String key = parts[0] + "#1";
+			boolean empty = plan.getDeposit().isEmpty() && plan.getWithdraw().isEmpty();
+			if (chests.get(key) != null && !empty)
+			{
+				// both were filled in: which one to keep is the user's call
+				continue;
+			}
+			chests.remove(plan.getKey());
+			if (chests.get(key) == null)
+			{
+				ChestPlan moved = chests.getOrCreate(key, chestName(key));
+				moved.getDeposit().addAll(plan.getDeposit());
+				moved.getWithdraw().addAll(plan.getWithdraw());
+				moved.setOrdered(plan.isOrdered());
+			}
+			changed = true;
+		}
+		return changed;
 	}
 
 	/** The Challenge Mode layout, which is fixed, so the sidebar can list chests in the order you reach them. */

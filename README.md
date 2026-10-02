@@ -63,6 +63,9 @@ The game only sends a storage's contents while its interface is open, so both st
 
 ## Changelog
 
+1.3.4
+- A room a raid has one of keeps its one chest: no more "Ice Demon 2" in a regular raid. An empty second chest made that way is removed.
+
 1.3.3
 - The clicks to make are numbered 1, 2, 3 from the next one, in the storage and the sidebar; no more gaps for steps already done.
 - With room in the storage, an item in the wrong slot is lit to go back in right away, not after the withdrawals.

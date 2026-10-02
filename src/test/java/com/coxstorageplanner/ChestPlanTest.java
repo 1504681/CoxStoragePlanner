@@ -147,6 +147,50 @@ public class ChestPlanTest
 	}
 
 	@Test
+	public void aRoomTheRaidHasOneOfIsAlwaysItsFirstChest()
+	{
+		List<String> seen = Arrays.asList("RAIDS_ICE_DEMON#1", "RAIDS_SCAVENGERS#1", "RAIDS_FARMING#1");
+		// walked into again by a square the plugin hadn't seen it in
+		assertEquals("RAIDS_ICE_DEMON#1", CoxStoragePlannerPlugin.roomKey("RAIDS_ICE_DEMON", 3, seen));
+		assertEquals("RAIDS_TEKTON#1", CoxStoragePlannerPlugin.roomKey("RAIDS_TEKTON", 3, seen));
+		// the ones a raid has two of: by floor, and the scavengers by the order they come in
+		assertEquals("RAIDS_FARMING#1", CoxStoragePlannerPlugin.roomKey("RAIDS_FARMING", 3, seen));
+		assertEquals("RAIDS_FARMING#2", CoxStoragePlannerPlugin.roomKey("RAIDS_FARMING", 2, seen));
+		assertEquals("RAIDS_END#2", CoxStoragePlannerPlugin.roomKey("RAIDS_END", 2, seen));
+		assertEquals("RAIDS_SCAVENGERS#2", CoxStoragePlannerPlugin.roomKey("RAIDS_SCAVENGERS", 3, seen));
+		assertEquals("RAIDS_SCAVENGERS#1", CoxStoragePlannerPlugin.roomKey("RAIDS_SCAVENGERS", 3, Collections.emptyList()));
+	}
+
+	@Test
+	public void aSecondChestOfSuchARoomIsFoldedIntoTheFirst()
+	{
+		ChestBook book = new ChestBook();
+		book.getOrCreate("RAIDS_ICE_DEMON#1", "Ice Demon").getWithdraw().add("Overload");
+		book.getOrCreate("RAIDS_ICE_DEMON#2", "Ice Demon 2");
+		book.getOrCreate("RAIDS_VASA#2", "Vasa 2").getDeposit().add("Kindling");
+		book.getOrCreate("RAIDS_SHAMANS#1", "Shamans").getWithdraw().add("Antidote");
+		book.getOrCreate("RAIDS_SHAMANS#2", "Shamans 2").getWithdraw().add("Prayer enhance");
+		book.getOrCreate("RAIDS_SCAVENGERS#2", "Scavengers 2");
+		book.getOrCreate("RAIDS_FARMING#2", "Farming 2");
+
+		assertTrue(CoxStoragePlannerPlugin.straySecondChests(book));
+
+		// empty beside the real one: gone
+		assertNull(book.get("RAIDS_ICE_DEMON#2"));
+		assertEquals(Collections.singletonList("Overload"), book.get("RAIDS_ICE_DEMON#1").getWithdraw());
+		// the only chest of its room: it becomes the room's
+		assertNull(book.get("RAIDS_VASA#2"));
+		assertEquals("Vasa", book.get("RAIDS_VASA#1").getName());
+		assertEquals(Collections.singletonList("Kindling"), book.get("RAIDS_VASA#1").getDeposit());
+		// both filled in: left for the user
+		assertEquals(Collections.singletonList("Prayer enhance"), book.get("RAIDS_SHAMANS#2").getWithdraw());
+		// rooms a raid has two of are untouched
+		assertNotNull(book.get("RAIDS_SCAVENGERS#2"));
+		assertNotNull(book.get("RAIDS_FARMING#2"));
+		assertFalse(CoxStoragePlannerPlugin.straySecondChests(book));
+	}
+
+	@Test
 	public void roomsComeFromTheTemplateChunk()
 	{
 		assertEquals("RAIDS_END", CoxStoragePlannerPlugin.roomType(chunk(3264, 5152, 0)));
