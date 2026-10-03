@@ -12,10 +12,12 @@ import java.awt.Rectangle;
 import java.awt.RenderingHints;
 import java.awt.Shape;
 import java.awt.Stroke;
+import java.awt.geom.AffineTransform;
 import java.awt.geom.Path2D;
 import java.awt.image.BufferedImage;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.IdentityHashMap;
 import java.util.List;
 import java.util.Map;
@@ -23,6 +25,7 @@ import java.util.Set;
 import java.util.TreeMap;
 import javax.inject.Inject;
 import net.runelite.api.Client;
+import net.runelite.api.Point;
 import net.runelite.api.gameval.InterfaceID;
 import net.runelite.api.widgets.Widget;
 import net.runelite.api.widgets.WidgetItem;
@@ -79,6 +82,8 @@ class ChestItemOverlay extends WidgetItemOverlay
 	/** The orbs of the ordered withdrawals drawn this frame, by rank: centre x, centre y, radius; and the colour of the line on from each. */
 	private final Map<Integer, int[]> orbs = new TreeMap<>();
 	private final Map<Integer, Color> orbColors = new HashMap<>();
+	/** The storage slots (by index) handed to renderItemOverlay this frame: the ones scrolled into view. */
+	private final Set<Integer> seen = new HashSet<>();
 
 	@Override
 	public Dimension render(Graphics2D graphics)
@@ -90,6 +95,7 @@ class ChestItemOverlay extends WidgetItemOverlay
 		twins.clear();
 		orbs.clear();
 		orbColors.clear();
+		seen.clear();
 		int group = plugin.getOpenStorage();
 		Widget items = group == 0 ? null : client.getWidget(group == InterfaceID.RAIDS_STORAGE_SHARED
 			? InterfaceID.RaidsStorageShared.ITEMS : InterfaceID.RaidsStoragePrivate.ITEMS);
@@ -109,6 +115,10 @@ class ChestItemOverlay extends WidgetItemOverlay
 		Shape clip = graphics.getClip();
 		super.render(graphics);
 		graphics.setClip(clip);
+		if (slots != null)
+		{
+			pinHidden(graphics, items, slots);
+		}
 		if (config.chestGlowPath() && orbs.size() > 1)
 		{
 			drawPath(graphics);
@@ -163,6 +173,128 @@ class ChestItemOverlay extends WidgetItemOverlay
 		}
 		graphics.setStroke(stroke);
 		graphics.setRenderingHint(RenderingHints.KEY_ANTIALIASING, aa);
+	}
+
+	/**
+	 * Storage items scrolled out of view are never handed to renderItemOverlay, so their clicks had no orb
+	 * and the lines stopped short of them. Each gets its orb pinned to the edge of the storage it's beyond,
+	 * with a nick pointing the way, so the line runs on to it and says which way to scroll.
+	 */
+	private void pinHidden(Graphics2D graphics, Widget items, Widget[] slots)
+	{
+		ChestProgress progress = plugin.getOpenChest();
+		if (!config.chestGlow() || progress == null || !progress.plan.isOrdered())
+		{
+			return;
+		}
+		ChestGlow mode = config.chestOrderedGlow();
+		int limit = mode == ChestGlow.NEXT_FOUR ? Math.max(2, config.chestGlowCount()) : mode.getSteps();
+		Rectangle view = items.getBounds();
+		for (Widget slot : slots)
+		{
+			if (slot == null || slot.getItemId() <= 0 || slot.isHidden() || seen.contains(slot.getIndex()))
+			{
+				continue;
+			}
+			int[] twin = twins.get(slot.getItemId());
+			if (twin != null && slot.getIndex() != twin[0])
+			{
+				continue;
+			}
+			Click click = withdrawal(progress, plugin.itemName(slot.getItemId()), twin != null ? twin[1] : slot.getItemQuantity(), limit);
+			if (click == null || orbs.containsKey(click.rank))
+			{
+				continue;
+			}
+			Point at = slot.getCanvasLocation();
+			int cx = at.getX() + slot.getWidth() / 2;
+			int cy = at.getY() + slot.getHeight() / 2;
+			if (view.contains(cx, cy))
+			{
+				continue;
+			}
+			Look look = look(progress, click, mode, limit);
+			Color color = look.color;
+			if (click.rank == 0 && config.chestGlowPulse())
+			{
+				color = fade(color, pulse());
+			}
+			int size = look.orb;
+			int ring = size >= ORB_NEXT ? 2 : 1;
+			int half = size / 2 + ring + 1;
+			boolean below = cy >= view.y + view.height;
+			int x = Math.max(view.x + half, Math.min(view.x + view.width - half, cx));
+			int y = below ? view.y + view.height - half : view.y + half;
+			// drawOrb centres a big orb in its bounds and sets a small one a pixel up and left of them
+			int nudge = size >= ORB_NEXT ? 0 : 1;
+			int[] center = drawOrb(graphics, new Rectangle(x - size / 2 + nudge, y - size / 2 + nudge, size, size), size, color, progress.number(click.number));
+			// the nick: a point off the orb's outer side, over the storage's edge, pointing the way to scroll
+			int base = below ? y + half - 2 : y - half + 2;
+			int tip = below ? base + 6 : base - 6;
+			Path2D.Double nick = new Path2D.Double();
+			nick.moveTo(x - 5, base);
+			nick.lineTo(x, tip);
+			nick.lineTo(x + 5, base);
+			nick.closePath();
+			graphics.setColor(new Color(0, 0, 0, Math.min(255, color.getAlpha())));
+			graphics.fill(nick);
+			graphics.setColor(color);
+			graphics.fill(new Path2D.Double(nick, AffineTransform.getTranslateInstance(0, below ? -1 : 1)));
+			orbs.put(click.rank, center);
+			orbColors.put(click.rank, look.path);
+		}
+	}
+
+	/** An ordered click's orb: its colour by how soon it comes, its size, and the colour of the line on from it. */
+	private static final class Look
+	{
+		final Color color;
+		final int orb;
+		final Color path;
+
+		private Look(Color color, int orb, Color path)
+		{
+			this.color = color;
+			this.orb = orb;
+			this.path = path;
+		}
+	}
+
+	private Look look(ChestProgress progress, Click click, ChestGlow mode, int limit)
+	{
+		int rank = click.rank;
+		Color color = config.chestGlowFirstColor();
+		// the colour says how soon: the next click's colour on it, the end colour on the last of the
+		// clicks shown, each step its own colour, so two left are green and yellow, not green and red
+		int span = mode == ChestGlow.NEXT_FOUR ? limit : Math.min(limit, progress.toClick());
+		if (span > 1)
+		{
+			color = blend(color, config.chestGlowLastColor(), step(rank, span));
+		}
+		// the line on to the next item leaves this one's last click, in that click's colour, and is as
+		// faint as that click is far off: "Xeric's aid, 3" sends a third of a line, then two thirds, then whole
+		Color last = span > 1 ? blend(config.chestGlowFirstColor(), config.chestGlowLastColor(), step(rank + click.count - 1, span)) : color;
+		Color path = fade(last, 1f / Math.max(1, click.count));
+		int orb;
+		if (mode == ChestGlow.NEXT_FOUR)
+		{
+			// the next click is big, the ones behind it smaller and fainter the further off
+			float far = rank == 0 || limit <= 2 ? 0 : (rank - 1) / (float) (limit - 2);
+			orb = rank == 0 ? ORB_NEXT : Math.round(ORB_NEAR - (ORB_NEAR - ORB_FAR) * far);
+			color = rank == 0 ? color : fade(color, 0.9f - 0.2f * far);
+		}
+		else
+		{
+			orb = ORB_NEAR;
+		}
+		return new Look(color, orb, path);
+	}
+
+	/** A slow breathe between half and full strength. */
+	private static float pulse()
+	{
+		double phase = (System.currentTimeMillis() % 1200) / 1200.0 * 2 * Math.PI;
+		return (float) (0.75 + 0.25 * Math.sin(phase));
 	}
 
 	/** Whether this item is beyond the step's remaining count; counts it otherwise. */
@@ -291,6 +423,10 @@ class ChestItemOverlay extends WidgetItemOverlay
 		}
 		String name = plugin.itemName(itemId);
 		int group = widgetItem.getWidget().getId() >>> 16;
+		if (widgetItem.getWidget().getParentId() == twinsParent)
+		{
+			seen.add(widgetItem.getWidget().getIndex());
+		}
 		Color color;
 		int order = 0;
 		int orb = 0;
@@ -375,36 +511,16 @@ class ChestItemOverlay extends WidgetItemOverlay
 			{
 				// a click keeps its number while the ones before it get made: 1 2 3 4, then 2 3 4 5
 				order = progress.number(click.number);
-				// the colour says how soon: the next click's colour on it, the end colour on the last of the
-				// clicks shown, each step its own colour, so two left are green and yellow, not green and red
-				int span = mode == ChestGlow.NEXT_FOUR ? limit : Math.min(limit, progress.toClick());
-				if (span > 1)
-				{
-					color = blend(color, config.chestGlowLastColor(), step(rank, span));
-				}
-				// the line on to the next item leaves this one's last click, in that click's colour, and is as
-				// faint as that click is far off: "Xeric's aid, 3" sends a third of a line, then two thirds, then whole
+				Look look = look(progress, click, mode, limit);
+				color = look.color;
+				orb = look.orb;
 				pathRank = rank;
-				Color last = span > 1 ? blend(config.chestGlowFirstColor(), config.chestGlowLastColor(), step(rank + click.count - 1, span)) : color;
-				pathColor = fade(last, 1f / Math.max(1, click.count));
-				if (mode == ChestGlow.NEXT_FOUR)
-				{
-					// the next click is big, the ones behind it smaller and fainter the further off
-					float far = rank == 0 || limit <= 2 ? 0 : (rank - 1) / (float) (limit - 2);
-					orb = rank == 0 ? ORB_NEXT : Math.round(ORB_NEAR - (ORB_NEAR - ORB_FAR) * far);
-					color = rank == 0 ? color : fade(color, 0.9f - 0.2f * far);
-				}
-				else
-				{
-					orb = ORB_NEAR;
-				}
+				pathColor = look.path;
 			}
 		}
 		if (pulse && config.chestGlowPulse())
 		{
-			// a slow breathe between half and full strength
-			double phase = (System.currentTimeMillis() % 1200) / 1200.0 * 2 * Math.PI;
-			color = fade(color, (float) (0.75 + 0.25 * Math.sin(phase)));
+			color = fade(color, pulse());
 		}
 		Rectangle bounds = widgetItem.getCanvasBounds();
 		BufferedImage outline = itemManager.getItemOutline(itemId, widgetItem.getQuantity(), color);
