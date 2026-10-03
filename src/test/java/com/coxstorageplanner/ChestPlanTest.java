@@ -678,4 +678,19 @@ public class ChestPlanTest
 		assertTrue(ChestBook.parse("", gson).all().isEmpty());
 		assertTrue(ChestBook.parse("not json", gson).all().isEmpty());
 	}
+
+	@Test
+	public void overlappingLinesShareWhatIsCarried()
+	{
+		ChestPlan plan = new ChestPlan("RAIDS_END#1", "Olm");
+		plan.getWithdraw().add("Xeric's aid, 2");
+		plan.getWithdraw().add("*aid*, 1");
+		Map<String, Integer> two = Collections.singletonMap("Xeric's aid(4)", 2);
+		Map<String, Integer> stored = Collections.singletonMap("Xeric's aid(4)", 1);
+		ChestProgress progress = new ChestProgress(plan, two, Collections.emptyMap(), stored);
+		assertTrue(progress.withdrawals.get(0).done);
+		assertFalse(progress.withdrawals.get(1).done);
+		Map<String, Integer> three = Collections.singletonMap("Xeric's aid(4)", 3);
+		assertTrue(new ChestProgress(plan, three, Collections.emptyMap(), stored).withdrawals.get(1).done);
+	}
 }

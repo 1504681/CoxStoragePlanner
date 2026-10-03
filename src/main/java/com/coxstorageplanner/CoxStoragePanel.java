@@ -52,8 +52,6 @@ class CoxStoragePanel extends PluginPanel
 		/** The chest shown in the sidebar, which inventory items are marked for when no storage is open. */
 		void selectChest(String key);
 
-		void deleteChest(String key);
-
 		/** Replaces a chest's Take out with what's worn and carried right now, in order, and orders it. */
 		void copyLoadout(String key);
 	}
@@ -406,13 +404,6 @@ class CoxStoragePanel extends PluginPanel
 		JPanel chooser = new JPanel(new BorderLayout(4, 0));
 		chooser.setOpaque(false);
 		chooser.add(chestChooser, BorderLayout.CENTER);
-		chooser.add(chip("Delete", ColorScheme.DARK_GRAY_COLOR, "Forget this chest and its lists", () ->
-		{
-			if (selectedChest != null)
-			{
-				actions.deleteChest(selectedChest);
-			}
-		}), BorderLayout.EAST);
 
 		check(chestMark, "<html>While on, left-clicking an item in a storage adds it to Withdraw and one in your inventory to Deposit."
 			+ "<br>Each click adds one more; Unmark on the right-click menu takes one away. Off again when you leave the raid.</html>");

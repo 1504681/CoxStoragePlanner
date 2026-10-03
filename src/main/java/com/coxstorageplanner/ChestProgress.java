@@ -5,7 +5,6 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
-import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 import java.util.regex.Pattern;
@@ -386,8 +385,10 @@ public final class ChestProgress
 				ChestPlan.Line line = putIn.get(j);
 				deposits.add(new Step(line, true, gone[j] || budgets[j] == 0, 0, line.counted ? budgets[j] : Integer.MAX_VALUE));
 			}
-			Map<String, Integer> asked = new LinkedHashMap<>();
-			// what's left in the storage for the steps further down, once the ones before took theirs
+			// what's left on you and in the storage for the steps further down, once the ones before took theirs:
+			// "Xeric's aid" twice means two of them, and "Xeric's aid, 2" then "*aid*" three
+			Map<String, Integer> wornLeft = new HashMap<>(worn);
+			Map<String, Integer> carriedLeft = new HashMap<>(inventory);
 			Map<String, Integer> left = storage == null ? null : new HashMap<>(storage);
 			int order = 0;
 			int clicks = 0;
@@ -398,11 +399,8 @@ public final class ChestProgress
 				{
 					continue;
 				}
-				// "Xeric's aid" twice means two of them
-				int need = asked.merge(line.name.toLowerCase(Locale.ROOT), line.count, Integer::sum);
-				int have = count(line, inventory) + count(line, worn);
-				// what this line has of its own, after the same line further up took its share
-				int got = Math.max(0, Math.min(line.count, have - (need - line.count)));
+				int fromWorn = take(line, wornLeft, line.count);
+				int got = fromWorn + take(line, carriedLeft, line.count - fromWorn);
 				boolean done = got >= line.count;
 				int remaining = line.count - got;
 				int there = done ? 0 : left == null ? remaining : take(line, left, remaining);

@@ -64,6 +64,11 @@ The game only sends a storage's contents while its interface is open, so both st
 
 ## Changelog
 
+1.3.13
+- Lines that overlap share what's carried: `Xeric's aid, 2` then `*aid*, 1` is three aids, not two counted twice.
+- The chest Delete button is gone: chests come from the storages you open, and one with empty lists does nothing.
+- Sidebar edits are applied on the client thread; the sidebar refreshes once per batch of changes; worn gear changing (ammo used up) refreshes the wear lines; a potion drunk after the storage is shut is no longer taken for a late deposit.
+
 1.3.12
 - Lines between clicks: an item clicked several times sends a fainter line on to the next item, in the colour of its last click, that fills in as the clicks are made (a third, two thirds, whole for `x3`).
 

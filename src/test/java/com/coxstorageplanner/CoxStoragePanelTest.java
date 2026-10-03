@@ -52,11 +52,6 @@ public class CoxStoragePanelTest
 		}
 
 		@Override
-		public void deleteChest(String key)
-		{
-		}
-
-		@Override
 		public void copyLoadout(String key)
 		{
 		}

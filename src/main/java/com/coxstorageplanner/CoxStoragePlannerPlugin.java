@@ -18,6 +18,7 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
+import java.util.concurrent.atomic.AtomicBoolean;
 import javax.inject.Inject;
 import lombok.extern.slf4j.Slf4j;
 import javax.swing.SwingUtilities;
@@ -75,13 +76,17 @@ import net.runelite.client.util.Text;
 public class CoxStoragePlannerPlugin extends Plugin implements CoxStoragePanel.Actions
 {
 	// keep in sync with build.gradle
-	public static final String VERSION = "1.3.12";
+	public static final String VERSION = "1.3.13";
 
 	/** Ticks outside before a raid counts as left, so a relog or a reload doesn't wipe the raid's state. */
 	private static final int LEAVE_TICKS = 5;
 	/** Least ticks between two messages to the party. */
 	private static final int SEND_INTERVAL = 5;
 	private static final int INVENTORY_SLOTS = 28;
+	/** Config keys only the plugin writes, as it changes them, so their change events need nothing more. */
+	private static final Set<String> OWN_KEYS = new HashSet<>(Arrays.asList(CoxStoragePlannerConfig.KEY_ICONS,
+		CoxStoragePlannerConfig.KEY_CHESTS, CoxStoragePlannerConfig.KEY_CHESTS_SOLO, CoxStoragePlannerConfig.KEY_NEEDS,
+		CoxStoragePlannerConfig.KEY_NEEDS_SOLO, CoxStoragePlannerConfig.KEY_NEEDS_TAB_SOLO));
 
 	@Inject
 	private Client client;
@@ -211,6 +216,8 @@ public class CoxStoragePlannerPlugin extends Plugin implements CoxStoragePanel.A
 	private CoxStorageMessage lastSent;
 
 	private volatile boolean inventoryDirty;
+	/** A push to the sidebar is waiting on the client thread. */
+	private final AtomicBoolean refreshQueued = new AtomicBoolean();
 	private volatile boolean resendStatus;
 
 	@Provides
@@ -504,7 +511,10 @@ public class CoxStoragePlannerPlugin extends Plugin implements CoxStoragePanel.A
 					moved.put(e.getKey(), -e.getValue());
 				}
 			}
-			if (!moved.isEmpty())
+			// once the storage is shut only a late deposit can still arrive, which only takes things away:
+			// anything new in the inventory (a potion drunk down a dose) means it wasn't a deposit
+			boolean shut = openStorage == 0;
+			if (!moved.isEmpty() && (!shut || moved.values().stream().allMatch(v -> v > 0)))
 			{
 				storageChanged(storage, moved);
 			}
@@ -1469,56 +1479,65 @@ public class CoxStoragePlannerPlugin extends Plugin implements CoxStoragePanel.A
 	{
 		if (CoxStoragePlannerConfig.GROUP.equals(event.getGroup()))
 		{
-			if (CoxStoragePlannerConfig.KEY_ICONS.equals(event.getKey()))
+			if (OWN_KEYS.contains(event.getKey()))
 			{
-				// the plugin's own bookkeeping
+				// the plugin's own bookkeeping, written where the change was made and already shown
 				return;
 			}
-			if (CoxStoragePlannerConfig.KEY_SEPARATE_SOLO_CHESTS.equals(event.getKey()) && separateChests()
-				&& chestsSolo.all().isEmpty() && !chests.all().isEmpty())
+			boolean separate = CoxStoragePlannerConfig.KEY_SEPARATE_SOLO_CHESTS.equals(event.getKey());
+			clientThread.invokeLater(() ->
 			{
-				// start the solo set from the team plans rather than from nothing
-				chestsSolo = chests.copy(gson);
-				saveChests();
-			}
-			clientThread.invokeLater(this::updateOpenChest);
+				if (separate && separateChests() && chestsSolo.all().isEmpty() && !chests.all().isEmpty())
+				{
+					// start the solo set from the team plans rather than from nothing
+					chestsSolo = chests.copy(gson);
+					saveChests();
+				}
+				updateOpenChest();
+			});
 			refresh();
 		}
 	}
 
-	// ---- sidebar actions, on the Swing thread ----
+	// ---- sidebar actions: called on the Swing thread, the plans are changed on the client thread ----
 
 	@Override
 	public void setChestOrdered(String key, boolean ordered)
 	{
-		ChestPlan plan = book().get(key);
-		if (plan != null && plan.isOrdered() != ordered)
+		clientThread.invokeLater(() ->
 		{
-			plan.setOrdered(ordered);
-			saveChests();
-			clientThread.invokeLater(this::updateOpenChest);
-			refresh();
-		}
+			ChestPlan plan = book().get(key);
+			if (plan != null && plan.isOrdered() != ordered)
+			{
+				plan.setOrdered(ordered);
+				saveChests();
+				updateOpenChest();
+				refresh();
+			}
+		});
 	}
 
 	@Override
 	public void setChestLines(String key, boolean deposit, String text)
 	{
-		ChestPlan plan = book().get(key);
-		if (plan == null)
-		{
-			return;
-		}
 		List<String> lines = ChestPlan.lines(text);
-		List<String> target = deposit ? plan.getDeposit() : plan.getWithdraw();
-		if (!target.equals(lines))
+		clientThread.invokeLater(() ->
 		{
-			target.clear();
-			target.addAll(lines);
-			saveChests();
-			clientThread.invokeLater(this::updateOpenChest);
-			refresh();
-		}
+			ChestPlan plan = book().get(key);
+			if (plan == null)
+			{
+				return;
+			}
+			List<String> target = deposit ? plan.getDeposit() : plan.getWithdraw();
+			if (!target.equals(lines))
+			{
+				target.clear();
+				target.addAll(lines);
+				saveChests();
+				updateOpenChest();
+				refresh();
+			}
+		});
 	}
 
 	@Override
@@ -1584,52 +1603,59 @@ public class CoxStoragePlannerPlugin extends Plugin implements CoxStoragePanel.A
 	}
 
 	@Override
-	public void deleteChest(String key)
-	{
-		if (book().remove(key))
-		{
-			saveChests();
-			clientThread.invokeLater(this::updateOpenChest);
-			refresh();
-		}
-	}
-
-	@Override
 	public void setNeed(Potion potion, int doses)
 	{
-		Needs plan = needsFor(needsTabSolo);
-		if (plan.set(potion, doses))
+		clientThread.invokeLater(() ->
 		{
-			configManager.setConfiguration(CoxStoragePlannerConfig.GROUP,
-				plan == needsSolo ? CoxStoragePlannerConfig.KEY_NEEDS_SOLO : CoxStoragePlannerConfig.KEY_NEEDS, plan.encode());
-			refresh();
-		}
+			Needs plan = needsFor(needsTabSolo);
+			if (plan.set(potion, doses))
+			{
+				configManager.setConfiguration(CoxStoragePlannerConfig.GROUP,
+					plan == needsSolo ? CoxStoragePlannerConfig.KEY_NEEDS_SOLO : CoxStoragePlannerConfig.KEY_NEEDS, plan.encode());
+				refresh();
+			}
+		});
 	}
 
 	@Override
 	public void setNeedsTab(boolean solo)
 	{
-		if (inRaid)
+		clientThread.invokeLater(() ->
 		{
-			// in a raid the switch overrides the party size, say to run the solo chests in a team of two
-			raidSoloOverride = solo == soloRaid ? null : solo;
-			clientThread.invokeLater(this::updateOpenChest);
-			refresh();
-			return;
-		}
-		if (needsTabSolo != solo)
-		{
-			needsTabSolo = solo;
-			configManager.setConfiguration(CoxStoragePlannerConfig.GROUP, CoxStoragePlannerConfig.KEY_NEEDS_TAB_SOLO, solo);
-			refresh();
-		}
+			if (inRaid)
+			{
+				// in a raid the switch overrides the party size, say to run the solo chests in a team of two
+				raidSoloOverride = solo == soloRaid ? null : solo;
+				updateOpenChest();
+				refresh();
+				return;
+			}
+			if (needsTabSolo != solo)
+			{
+				needsTabSolo = solo;
+				configManager.setConfiguration(CoxStoragePlannerConfig.GROUP, CoxStoragePlannerConfig.KEY_NEEDS_TAB_SOLO, solo);
+				refresh();
+			}
+		});
 	}
 
 	// ---- drawing ----
 
-	/** Pushes the current state to the sidebar. Safe from any thread. */
+	/**
+	 * Pushes the current state to the sidebar. Safe from any thread: the state is put together on the client
+	 * thread, where everything it reads is written, and calls before that happens make one push between them.
+	 */
 	private void refresh()
 	{
+		if (panel != null && refreshQueued.compareAndSet(false, true))
+		{
+			clientThread.invokeLater(this::pushState);
+		}
+	}
+
+	private void pushState()
+	{
+		refreshQueued.set(false);
 		CoxStoragePanel target = panel;
 		if (target == null)
 		{
