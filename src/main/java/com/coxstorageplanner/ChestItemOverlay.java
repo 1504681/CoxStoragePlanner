@@ -76,7 +76,7 @@ class ChestItemOverlay extends WidgetItemOverlay
 	private final Map<String, Integer> named = new HashMap<>();
 	/** Deposits lit so far this frame that take a storage slot. */
 	private int slotsLit;
-	/** The orbs of the ordered withdrawals drawn this frame, by rank: centre x, centre y, radius; and their colours. */
+	/** The orbs of the ordered withdrawals drawn this frame, by rank: centre x, centre y, radius; and the colour of the line on from each. */
 	private final Map<Integer, int[]> orbs = new TreeMap<>();
 	private final Map<Integer, Color> orbColors = new HashMap<>();
 
@@ -116,7 +116,10 @@ class ChestItemOverlay extends WidgetItemOverlay
 		return null;
 	}
 
-	/** Joins the orbs up in click order, orb edge to orb edge, each line in the colour of the click it leaves. */
+	/**
+	 * Joins the orbs up in click order, orb edge to orb edge, each line in the colour of the last click it
+	 * leaves: an item clicked three times sends a line a third as strong as a single one, then two thirds, then whole.
+	 */
 	private void drawPath(Graphics2D graphics)
 	{
 		Object aa = graphics.getRenderingHint(RenderingHints.KEY_ANTIALIASING);
@@ -291,8 +294,9 @@ class ChestItemOverlay extends WidgetItemOverlay
 		Color color;
 		int order = 0;
 		int orb = 0;
-		// an ordered withdrawal's place among the clicks lit, for the lines between them
+		// an ordered withdrawal's place among the clicks lit, and the colour of the line on from it
 		int pathRank = -1;
+		Color pathColor = null;
 		boolean pulse;
 		// the "x5" in the slot's corner: how many, or how many clicks
 		int times = 0;
@@ -371,7 +375,6 @@ class ChestItemOverlay extends WidgetItemOverlay
 			{
 				// a click keeps its number while the ones before it get made: 1 2 3 4, then 2 3 4 5
 				order = progress.number(click.number);
-				pathRank = rank;
 				// the colour says how soon: the next click's colour on it, the end colour on the last of the
 				// clicks shown, each step its own colour, so two left are green and yellow, not green and red
 				int span = mode == ChestGlow.NEXT_FOUR ? limit : Math.min(limit, progress.toClick());
@@ -379,6 +382,11 @@ class ChestItemOverlay extends WidgetItemOverlay
 				{
 					color = blend(color, config.chestGlowLastColor(), step(rank, span));
 				}
+				// the line on to the next item leaves this one's last click, in that click's colour, and is as
+				// faint as that click is far off: "Xeric's aid, 3" sends a third of a line, then two thirds, then whole
+				pathRank = rank;
+				Color last = span > 1 ? blend(config.chestGlowFirstColor(), config.chestGlowLastColor(), step(rank + click.count - 1, span)) : color;
+				pathColor = fade(last, 1f / Math.max(1, click.count));
 				if (mode == ChestGlow.NEXT_FOUR)
 				{
 					// the next click is big, the ones behind it smaller and fainter the further off
@@ -424,7 +432,7 @@ class ChestItemOverlay extends WidgetItemOverlay
 			if (pathRank >= 0 && !orbs.containsKey(pathRank))
 			{
 				orbs.put(pathRank, center);
-				orbColors.put(pathRank, color);
+				orbColors.put(pathRank, pathColor);
 			}
 		}
 		if (times > 1 && times != Integer.MAX_VALUE)

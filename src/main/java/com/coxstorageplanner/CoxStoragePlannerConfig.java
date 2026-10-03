@@ -207,7 +207,7 @@ public interface CoxStoragePlannerConfig extends Config
 	@ConfigItem(
 		keyName = "chestGlowPath",
 		name = "Lines between clicks",
-		description = "Draw a line from each lit click of an ordered withdrawal to the one after it, so the order reads at a glance",
+		description = "Draw a line from each lit click of an ordered withdrawal to the one after it, so the order reads at a glance. An item clicked several times sends a fainter line, in the colour of its last click, that fills in as the clicks are made",
 		section = chestSection,
 		position = 12
 	)
