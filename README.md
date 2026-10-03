@@ -18,7 +18,7 @@ A private storage holds 25 items (tiny) to 120 (massive), every item taking a sl
 
 With *Separate chests for solo raids* on, solo raids get their own set of chest plans (it starts as a copy of the team ones): inside a raid the party size picks the set (click the **Team | Solo** switch to override it for that raid), outside it the switch does.
 
-Tick **Ordered withdrawal** and the list becomes clicks 1, 2, 3. While the storage is open the items still to move glow: in the side inventory what goes in, in the storage what comes out. The clicks still to make when you open the storage are numbered 1, 2, 3, so nothing is skipped for what's already done, and each keeps its number as you go (1 2 3 4, then 2 3 4 5); and a step whose item isn't anywhere (not on you, not in the storage) takes none. Clicking any of several identical items in the storage takes the first of them and leaves the rest in place, so only the last of a kind lights: `Xeric's aid, 3` is that one aid with `x3` in its corner, clicked three times. A stack is one click whatever the count. The next four clicks light (*Clicks shown*): the next one gets a big orb over the item, the ones after it small ones in the corner. The colour runs from the glow colour on the next click to the end colour on the last one lit. A setting switches the glow to only the next click, or to all of them; *Outline thickness* sets how heavy the outline is. When the next item is scrolled out of view, the storage's scroll arrow lights, up or down (setting). The storage unit in the room you're in carries a `?` while its chest still has something to wear, put in or take out, and a green tick once the inventory says it's all done (setting); the mark only asks for the right items, not for the right slots.
+Tick **Ordered withdrawal** and the list becomes clicks 1, 2, 3. While the storage is open the items still to move glow: in the side inventory what goes in, in the storage what comes out. The clicks still to make when you open the storage are numbered 1, 2, 3, so nothing is skipped for what's already done, and each keeps its number as you go (1 2 3 4, then 2 3 4 5); and a step whose item isn't anywhere (not on you, not in the storage) takes none. Clicking any of several identical items in the storage takes the first of them and leaves the rest in place, so only the last of a kind lights: `Xeric's aid, 3` is that one aid with `x3` in its corner, clicked three times. A stack is one click whatever the count. The next four clicks light (*Clicks shown*): the next one gets a big orb over the item, the ones after it small ones in the corner. The colour runs round the colour wheel from the next click colour on the next click to the end colour on the last one lit: green, yellow, orange, red by default. A setting switches the glow to only the next click, or to all of them; *Outline thickness* sets how heavy the outline is. When the next item is scrolled out of view, the storage's scroll arrow lights, up or down (setting). The storage unit in the room you're in carries a `?` while its chest still has something to wear, put in or take out, and a green tick once the inventory says it's all done (setting); the mark only asks for the right items, not for the right slots.
 
 Under the lists the sidebar shows the plan as icons, what goes in and what comes out, `…` after the fourth. An item gets its icon once the plugin has seen it in a raid; until then the start of its name stands in.
 
@@ -48,7 +48,7 @@ The game only sends a storage's contents while its interface is open, so both st
 | ? and tick over the storage unit | on |
 | Organise the inventory | on |
 | Separate chests for solo raids | off |
-| Glow colour / end colour / wear colour | yellow / green / purple |
+| Glow colour / next click colour / end colour / wear colour | yellow / green / red / purple |
 | Outline thickness | 1.5 |
 | Pulse | on |
 | **Sidebar** | |
@@ -62,6 +62,10 @@ The game only sends a storage's contents while its interface is open, so both st
 | Count split overloads | on |
 
 ## Changelog
+
+1.3.9
+- The clicks lit run green, yellow, orange, red: new *Next click colour* (green) and the *End colour* now red, blended round the colour wheel. *Glow colour* (yellow) is left for deposits and unordered withdrawals.
+- The orbs behind the next click shrink more clearly with distance (20 px down to 10).
 
 1.3.8
 - Gear to wear glows stronger: a deeper purple at full strength by default, and its outline is a pixel heavier than the others.

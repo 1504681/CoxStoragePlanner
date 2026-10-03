@@ -30,7 +30,7 @@ import net.runelite.client.ui.overlay.WidgetItemOverlay;
  * in the storage what comes out, and gear to put on in its own colour before either. With an ordered
  * plan the clicks to make are numbered from the next one: 1, 2, 3, whatever is done already. The next
  * click pulses, and with the next few lit the orbs shrink the further off they are, while the colour
- * says how far down the list a click is, from the first one's to the last one's.
+ * says how soon a click comes, green for the next one through yellow and orange to red for the last lit.
  * Clicking any of several identical items in the storage takes the first of them and leaves the rest
  * where they are, so only the last of a kind lights: "Xeric's aid, 3" is that one aid clicked three
  * times, with "x3" in the slot's top right corner. A plan held to the slot lights the inventory by slot,
@@ -55,7 +55,7 @@ class ChestItemOverlay extends WidgetItemOverlay
 
 	/** Orb diameter of the next withdrawal, which covers the item, and of the nearest and furthest ones after it. */
 	private static final int ORB_NEXT = 28;
-	private static final int ORB_NEAR = 16;
+	private static final int ORB_NEAR = 20;
 	private static final int ORB_FAR = 10;
 
 	/** How much of each step has lit up so far this frame, so "Xeric's aid, 2" lights two and not the whole row. */
@@ -300,12 +300,12 @@ class ChestItemOverlay extends WidgetItemOverlay
 			times = click.step.stack ? click.step.remaining : click.count;
 			int rank = click.rank;
 			pulse = !ordered || rank == 0;
-			color = config.chestGlowColor();
+			color = ordered ? config.chestGlowFirstColor() : config.chestGlowColor();
 			if (ordered)
 			{
 				// a click keeps its number while the ones before it get made: 1 2 3 4, then 2 3 4 5
 				order = progress.number(click.number);
-				// the colour says how soon: the glow colour on the next click, the end colour on the last one lit
+				// the colour says how soon: the next click's colour on it, the end colour on the last one lit
 				int shown = Math.min(limit, progress.toClick());
 				if (shown > 1)
 				{
@@ -415,12 +415,25 @@ class ChestItemOverlay extends WidgetItemOverlay
 		return new Color(color.getRed(), color.getGreen(), color.getBlue(), Math.round(color.getAlpha() * strength));
 	}
 
-	private static Color blend(Color a, Color b, float t)
+	/**
+	 * Between two colours the shorter way round the colour wheel, so green to red goes by yellow and
+	 * orange rather than through brown; a grey, having no hue, is met in a straight line instead.
+	 */
+	static Color blend(Color a, Color b, float t)
 	{
-		return new Color(
-			Math.round(a.getRed() + (b.getRed() - a.getRed()) * t),
-			Math.round(a.getGreen() + (b.getGreen() - a.getGreen()) * t),
-			Math.round(a.getBlue() + (b.getBlue() - a.getBlue()) * t),
-			Math.round(a.getAlpha() + (b.getAlpha() - a.getAlpha()) * t));
+		int alpha = Math.round(a.getAlpha() + (b.getAlpha() - a.getAlpha()) * t);
+		float[] from = Color.RGBtoHSB(a.getRed(), a.getGreen(), a.getBlue(), null);
+		float[] to = Color.RGBtoHSB(b.getRed(), b.getGreen(), b.getBlue(), null);
+		if (from[1] == 0 || to[1] == 0)
+		{
+			return new Color(
+				Math.round(a.getRed() + (b.getRed() - a.getRed()) * t),
+				Math.round(a.getGreen() + (b.getGreen() - a.getGreen()) * t),
+				Math.round(a.getBlue() + (b.getBlue() - a.getBlue()) * t), alpha);
+		}
+		float turn = to[0] - from[0];
+		turn -= Math.round(turn);
+		Color c = Color.getHSBColor(from[0] + turn * t, from[1] + (to[1] - from[1]) * t, from[2] + (to[2] - from[2]) * t);
+		return new Color(c.getRed(), c.getGreen(), c.getBlue(), alpha);
 	}
 }

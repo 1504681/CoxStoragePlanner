@@ -144,7 +144,7 @@ public interface CoxStoragePlannerConfig extends Config
 	@ConfigItem(
 		keyName = "chestGlowColor",
 		name = "Glow colour",
-		description = "Outline colour, and the colour of an ordered withdrawal's first click",
+		description = "Outline colour of what's to put in, and of what's to take out without an order",
 		section = chestSection,
 		position = 7
 	)
@@ -155,15 +155,28 @@ public interface CoxStoragePlannerConfig extends Config
 
 	@Alpha
 	@ConfigItem(
-		keyName = "chestGlowLastColor",
-		name = "End colour",
-		description = "Colour of the last click lit of an ordered withdrawal. The clicks lit shade from the glow colour on the next one to this one, so the colour shows how soon a click comes",
+		keyName = "chestGlowFirstColor",
+		name = "Next click colour",
+		description = "Colour of the next click of an ordered withdrawal",
 		section = chestSection,
 		position = 8
 	)
+	default Color chestGlowFirstColor()
+	{
+		return new Color(30, 220, 60, 255);
+	}
+
+	@Alpha
+	@ConfigItem(
+		keyName = "chestGlowLastColor",
+		name = "End colour",
+		description = "Colour of the last click lit of an ordered withdrawal. The clicks lit run round the colour wheel from the next click's colour to this one, green to red by yellow and orange, so the colour shows how soon a click comes",
+		section = chestSection,
+		position = 9
+	)
 	default Color chestGlowLastColor()
 	{
-		return new Color(40, 230, 70, 230);
+		return new Color(240, 40, 40, 255);
 	}
 
 	@Alpha
@@ -172,7 +185,7 @@ public interface CoxStoragePlannerConfig extends Config
 		name = "Wear colour",
 		description = "Outline of gear still to put on, in the storage and the inventory; drawn a pixel heavier than the rest",
 		section = chestSection,
-		position = 9
+		position = 10
 	)
 	default Color chestWearColor()
 	{
