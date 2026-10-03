@@ -13,11 +13,16 @@ public class ChestGlowBlendTest
 	{
 		Color green = new Color(30, 220, 60, 255);
 		Color red = new Color(240, 40, 40, 255);
-		float[] second = hsb(ChestItemOverlay.blend(green, red, 1 / 3f));
-		float[] third = hsb(ChestItemOverlay.blend(green, red, 2 / 3f));
+		float[] second = hsb(ChestItemOverlay.blend(green, red, ChestItemOverlay.step(1, 4)));
+		float[] third = hsb(ChestItemOverlay.blend(green, red, ChestItemOverlay.step(2, 4)));
 		// hue in degrees: green 120-ish, yellow 60, orange 30, red 0
-		assertTrue(second[0] * 360 > 60 && second[0] * 360 < 100);
-		assertTrue(third[0] * 360 > 20 && third[0] * 360 < 50);
+		assertTrue(second[0] * 360 > 55 && second[0] * 360 < 70);
+		assertTrue(third[0] * 360 > 25 && third[0] * 360 < 40);
+		assertEquals(0f, ChestItemOverlay.step(0, 4), 0f);
+		assertEquals(1f, ChestItemOverlay.step(3, 4), 0f);
+		// two left: green and yellow, not green and red
+		assertEquals(0.5f, ChestItemOverlay.step(1, 4), 0f);
+		assertEquals(1f, ChestItemOverlay.step(1, 2), 0f);
 		assertEquals(green, ChestItemOverlay.blend(green, red, 0));
 		assertEquals(red, ChestItemOverlay.blend(green, red, 1));
 		// no brown in between

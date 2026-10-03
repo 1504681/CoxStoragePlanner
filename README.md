@@ -64,6 +64,9 @@ The game only sends a storage's contents while its interface is open, so both st
 
 ## Changelog
 
+1.3.11
+- The second and third clicks are yellow and orange, not lime and amber: each step goes half the remaining way round the colour wheel.
+
 1.3.10
 - Each of the clicks shown has its own colour whatever is left: with two to go they're green and yellow, not green and red.
 - *Lines between clicks* (off by default) joins the lit clicks up with arrows, in order.

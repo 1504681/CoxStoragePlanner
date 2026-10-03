@@ -377,7 +377,7 @@ class ChestItemOverlay extends WidgetItemOverlay
 				int span = mode == ChestGlow.NEXT_FOUR ? limit : Math.min(limit, progress.toClick());
 				if (span > 1)
 				{
-					color = blend(color, config.chestGlowLastColor(), Math.min(1f, rank / (float) (span - 1)));
+					color = blend(color, config.chestGlowLastColor(), step(rank, span));
 				}
 				if (mode == ChestGlow.NEXT_FOUR)
 				{
@@ -487,6 +487,16 @@ class ChestItemOverlay extends WidgetItemOverlay
 	private static Color fade(Color color, float strength)
 	{
 		return new Color(color.getRed(), color.getGreen(), color.getBlue(), Math.round(color.getAlpha() * strength));
+	}
+
+	/**
+	 * How far along from the next click's colour to the end colour the click at a rank is, of {@code span}
+	 * lit: each step goes half the way that's left, and the last goes all the way, so green to red by four
+	 * is green, yellow, orange, red rather than green, lime, amber, red at even spacing.
+	 */
+	static float step(int rank, int span)
+	{
+		return rank >= span - 1 ? 1f : 1f - (float) Math.pow(0.5, rank);
 	}
 
 	/**
