@@ -39,7 +39,7 @@ While its storage is open a chest goes through three phases:
 
 1. **Wear**: `wear` lines glow purple in the storage or the inventory until they're worn. Nothing else lights until they are.
 2. **Deposit**: the items to put in glow yellow in the side inventory.
-3. **Withdraw**: the items to take out glow in the storage. With **Ordered withdrawal** on they're clicks 1, 2, 3:
+3. **Withdraw**: the items to take out glow in the storage, all of them, in yellow. With **Ordered withdrawal** on they're clicks 1, 2, 3 instead (*Ordered withdrawal glow* picks how many light, *Organise the inventory* whether the slots matter):
    - The next four light (*Clicks shown*): a big orb on the next click, smaller ones on the ones after, green, yellow, orange, red. A click keeps its number as you go (1 2 3 4, then 2 3 4 5).
    - Of several identical items only the last lights, with `x3` in its corner for how many clicks. A stack is one click.
    - *Lines between clicks* draws arrows from click to click. A click on an item scrolled out of view gets its orb pinned to the storage's edge, pointing the way to scroll, and the storage's scroll arrow lights.
