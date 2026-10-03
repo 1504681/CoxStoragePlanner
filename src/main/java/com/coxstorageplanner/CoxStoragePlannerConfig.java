@@ -205,6 +205,18 @@ public interface CoxStoragePlannerConfig extends Config
 	}
 
 	@ConfigItem(
+		keyName = "chestGlowPath",
+		name = "Lines between clicks",
+		description = "Draw a line from each lit click of an ordered withdrawal to the one after it, so the order reads at a glance",
+		section = chestSection,
+		position = 12
+	)
+	default boolean chestGlowPath()
+	{
+		return false;
+	}
+
+	@ConfigItem(
 		keyName = "hideOutsideRaid",
 		name = "Hide away from the Chambers",
 		description = "Only show the sidebar icon in the Chambers of Xeric and outside its entrance on Mount Quidamortem",

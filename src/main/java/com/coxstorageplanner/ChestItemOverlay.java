@@ -1,6 +1,7 @@
 package com.coxstorageplanner;
 
 import java.awt.AlphaComposite;
+import java.awt.BasicStroke;
 import java.awt.Color;
 import java.awt.Composite;
 import java.awt.Dimension;
@@ -9,6 +10,9 @@ import java.awt.FontMetrics;
 import java.awt.Graphics2D;
 import java.awt.Rectangle;
 import java.awt.RenderingHints;
+import java.awt.Shape;
+import java.awt.Stroke;
+import java.awt.geom.Path2D;
 import java.awt.image.BufferedImage;
 import java.util.Collections;
 import java.util.HashMap;
@@ -16,6 +20,7 @@ import java.util.IdentityHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.TreeMap;
 import javax.inject.Inject;
 import net.runelite.api.Client;
 import net.runelite.api.gameval.InterfaceID;
@@ -30,7 +35,8 @@ import net.runelite.client.ui.overlay.WidgetItemOverlay;
  * in the storage what comes out, and gear to put on in its own colour before either. With an ordered
  * plan the clicks to make are numbered from the next one: 1, 2, 3, whatever is done already. The next
  * click pulses, and with the next few lit the orbs shrink the further off they are, while the colour
- * says how soon a click comes, green for the next one through yellow and orange to red for the last lit.
+ * says how soon a click comes, green for the next one through yellow and orange to red for the fourth,
+ * each step its own colour however many are lit; a setting joins them up with lines, in order.
  * Clicking any of several identical items in the storage takes the first of them and leaves the rest
  * where they are, so only the last of a kind lights: "Xeric's aid, 3" is that one aid clicked three
  * times, with "x3" in the slot's top right corner. A plan held to the slot lights the inventory by slot,
@@ -70,6 +76,9 @@ class ChestItemOverlay extends WidgetItemOverlay
 	private final Map<String, Integer> named = new HashMap<>();
 	/** Deposits lit so far this frame that take a storage slot. */
 	private int slotsLit;
+	/** The orbs of the ordered withdrawals drawn this frame, by rank: centre x, centre y, radius; and their colours. */
+	private final Map<Integer, int[]> orbs = new TreeMap<>();
+	private final Map<Integer, Color> orbColors = new HashMap<>();
 
 	@Override
 	public Dimension render(Graphics2D graphics)
@@ -79,6 +88,8 @@ class ChestItemOverlay extends WidgetItemOverlay
 		named.clear();
 		slotsLit = 0;
 		twins.clear();
+		orbs.clear();
+		orbColors.clear();
 		int group = plugin.getOpenStorage();
 		Widget items = group == 0 ? null : client.getWidget(group == InterfaceID.RAIDS_STORAGE_SHARED
 			? InterfaceID.RaidsStorageShared.ITEMS : InterfaceID.RaidsStoragePrivate.ITEMS);
@@ -95,7 +106,60 @@ class ChestItemOverlay extends WidgetItemOverlay
 			twin[0] = Math.max(twin[0], slot.getIndex());
 			twin[1] += Math.max(1, slot.getItemQuantity());
 		}
-		return super.render(graphics);
+		Shape clip = graphics.getClip();
+		super.render(graphics);
+		graphics.setClip(clip);
+		if (config.chestGlowPath() && orbs.size() > 1)
+		{
+			drawPath(graphics);
+		}
+		return null;
+	}
+
+	/** Joins the orbs up in click order, orb edge to orb edge, each line in the colour of the click it leaves. */
+	private void drawPath(Graphics2D graphics)
+	{
+		Object aa = graphics.getRenderingHint(RenderingHints.KEY_ANTIALIASING);
+		Stroke stroke = graphics.getStroke();
+		graphics.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
+		int[] from = null;
+		Color color = null;
+		for (Map.Entry<Integer, int[]> e : orbs.entrySet())
+		{
+			int[] to = e.getValue();
+			if (from != null)
+			{
+				double dx = to[0] - from[0];
+				double dy = to[1] - from[1];
+				double length = Math.hypot(dx, dy);
+				if (length > from[2] + to[2] + 4)
+				{
+					double ux = dx / length;
+					double uy = dy / length;
+					double x1 = from[0] + ux * (from[2] + 1);
+					double y1 = from[1] + uy * (from[2] + 1);
+					double x2 = to[0] - ux * (to[2] + 1);
+					double y2 = to[1] - uy * (to[2] + 1);
+					// an arrowhead at the far end, so the line says which way
+					Path2D.Double line = new Path2D.Double();
+					line.moveTo(x1, y1);
+					line.lineTo(x2, y2);
+					line.moveTo(x2 - ux * 7 + uy * 4, y2 - uy * 7 - ux * 4);
+					line.lineTo(x2, y2);
+					line.lineTo(x2 - ux * 7 - uy * 4, y2 - uy * 7 + ux * 4);
+					graphics.setStroke(new BasicStroke(4f, BasicStroke.CAP_ROUND, BasicStroke.JOIN_ROUND));
+					graphics.setColor(new Color(0, 0, 0, Math.min(255, color.getAlpha())));
+					graphics.draw(line);
+					graphics.setStroke(new BasicStroke(2f, BasicStroke.CAP_ROUND, BasicStroke.JOIN_ROUND));
+					graphics.setColor(color);
+					graphics.draw(line);
+				}
+			}
+			from = to;
+			color = orbColors.get(e.getKey());
+		}
+		graphics.setStroke(stroke);
+		graphics.setRenderingHint(RenderingHints.KEY_ANTIALIASING, aa);
 	}
 
 	/** Whether this item is beyond the step's remaining count; counts it otherwise. */
@@ -227,6 +291,8 @@ class ChestItemOverlay extends WidgetItemOverlay
 		Color color;
 		int order = 0;
 		int orb = 0;
+		// an ordered withdrawal's place among the clicks lit, for the lines between them
+		int pathRank = -1;
 		boolean pulse;
 		// the "x5" in the slot's corner: how many, or how many clicks
 		int times = 0;
@@ -305,11 +371,13 @@ class ChestItemOverlay extends WidgetItemOverlay
 			{
 				// a click keeps its number while the ones before it get made: 1 2 3 4, then 2 3 4 5
 				order = progress.number(click.number);
-				// the colour says how soon: the next click's colour on it, the end colour on the last one lit
-				int shown = Math.min(limit, progress.toClick());
-				if (shown > 1)
+				pathRank = rank;
+				// the colour says how soon: the next click's colour on it, the end colour on the last of the
+				// clicks shown, each step its own colour, so two left are green and yellow, not green and red
+				int span = mode == ChestGlow.NEXT_FOUR ? limit : Math.min(limit, progress.toClick());
+				if (span > 1)
 				{
-					color = blend(color, config.chestGlowLastColor(), Math.min(1f, rank / (float) (shown - 1)));
+					color = blend(color, config.chestGlowLastColor(), Math.min(1f, rank / (float) (span - 1)));
 				}
 				if (mode == ChestGlow.NEXT_FOUR)
 				{
@@ -352,7 +420,12 @@ class ChestItemOverlay extends WidgetItemOverlay
 		graphics.setComposite(composite);
 		if (order > 0)
 		{
-			drawOrb(graphics, bounds, orb, color, order);
+			int[] center = drawOrb(graphics, bounds, orb, color, order);
+			if (pathRank >= 0 && !orbs.containsKey(pathRank))
+			{
+				orbs.put(pathRank, center);
+				orbColors.put(pathRank, color);
+			}
 		}
 		if (times > 1 && times != Integer.MAX_VALUE)
 		{
@@ -384,7 +457,7 @@ class ChestItemOverlay extends WidgetItemOverlay
 	 * A filled circle with the step number in it: the biggest sits over the middle of the item so the
 	 * next click can't be missed, the smaller ones in the top left corner.
 	 */
-	private static void drawOrb(Graphics2D graphics, Rectangle bounds, int size, Color color, int order)
+	private static int[] drawOrb(Graphics2D graphics, Rectangle bounds, int size, Color color, int order)
 	{
 		Object aa = graphics.getRenderingHint(RenderingHints.KEY_ANTIALIASING);
 		graphics.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
@@ -408,6 +481,7 @@ class ChestItemOverlay extends WidgetItemOverlay
 		graphics.drawString(text, tx + 1, ty + 1);
 		graphics.setColor(Color.WHITE);
 		graphics.drawString(text, tx, ty);
+		return new int[]{x + size / 2, y + size / 2, size / 2 + ring};
 	}
 
 	private static Color fade(Color color, float strength)
