@@ -76,7 +76,7 @@ import net.runelite.client.util.Text;
 public class CoxStoragePlannerPlugin extends Plugin implements CoxStoragePanel.Actions
 {
 	// keep in sync with build.gradle
-	public static final String VERSION = "1.3.13";
+	public static final String VERSION = "1.3.14";
 
 	/** Ticks outside before a raid counts as left, so a relog or a reload doesn't wipe the raid's state. */
 	private static final int LEAVE_TICKS = 5;
@@ -1041,7 +1041,7 @@ public class CoxStoragePlannerPlugin extends Plugin implements CoxStoragePanel.A
 		ROOMS.put(5280 + (1 << 16), "RAIDS_TEKTON");
 		ROOMS.put(5344 + (1 << 16), "RAIDS_TIGHTROPE");
 		ROOMS.put(5440 + (1 << 16), "RAIDS_FARMING");
-		ROOMS.put(5248 + (2 << 16), "RAIDS_GUARDIANS");
+		// Guardians (5248 on plane 2) has no storage, so its chunk counts as the stretch before it
 		ROOMS.put(5280 + (2 << 16), "RAIDS_VESPULA");
 		ROOMS.put(5344 + (2 << 16), "RAIDS_CRABS");
 	}
@@ -1072,9 +1072,10 @@ public class CoxStoragePlannerPlugin extends Plugin implements CoxStoragePanel.A
 	private void migrateChestKeys(ChestBook chests)
 	{
 		boolean changed = straySecondChests(chests);
+		changed |= retiredChests(chests);
 		for (ChestPlan plan : chests.all())
 		{
-			if ((plan.getName().equals("End 1") || plan.getName().equals("End 2") || plan.getName().equals("End"))
+			if ((plan.getName().equals("End 1") || plan.getName().equals("End 2") || plan.getName().equals("End") || plan.getName().equals("Tightrope"))
 				&& !plan.getName().equals(chestName(plan.getKey())))
 			{
 				plan.setName(chestName(plan.getKey()));
@@ -1112,31 +1113,56 @@ public class CoxStoragePlannerPlugin extends Plugin implements CoxStoragePanel.A
 			{
 				continue;
 			}
-			String key = parts[0] + "#1";
-			boolean empty = plan.getDeposit().isEmpty() && plan.getWithdraw().isEmpty();
-			if (chests.get(key) != null && !empty)
-			{
-				// both were filled in: which one to keep is the user's call
-				continue;
-			}
-			chests.remove(plan.getKey());
-			if (chests.get(key) == null)
-			{
-				ChestPlan moved = chests.getOrCreate(key, chestName(key));
-				moved.getDeposit().addAll(plan.getDeposit());
-				moved.getWithdraw().addAll(plan.getWithdraw());
-				moved.setOrdered(plan.isOrdered());
-			}
-			changed = true;
+			changed |= fold(chests, plan, parts[0] + "#1");
 		}
 		return changed;
+	}
+
+	/**
+	 * Chests of rooms that turned out to have no storage (Guardians, which earlier versions placed) belong to
+	 * the chest before them. Whether anything changed.
+	 */
+	static boolean retiredChests(ChestBook chests)
+	{
+		boolean changed = false;
+		for (ChestPlan plan : chests.all())
+		{
+			if (plan.getKey().startsWith("RAIDS_GUARDIANS#"))
+			{
+				changed |= fold(chests, plan, "RAIDS_TIGHTROPE#1");
+			}
+		}
+		return changed;
+	}
+
+	/** Moves a chest's lines to the chest at key, unless both have lines (which one to keep is the user's call). */
+	private static boolean fold(ChestBook chests, ChestPlan plan, String key)
+	{
+		boolean empty = plan.getDeposit().isEmpty() && plan.getWithdraw().isEmpty();
+		ChestPlan target = chests.get(key);
+		if (target != null && !empty && !(target.getDeposit().isEmpty() && target.getWithdraw().isEmpty()))
+		{
+			return false;
+		}
+		chests.remove(plan.getKey());
+		if (!empty)
+		{
+			if (target == null)
+			{
+				target = chests.getOrCreate(key, chestName(key));
+			}
+			target.getDeposit().addAll(plan.getDeposit());
+			target.getWithdraw().addAll(plan.getWithdraw());
+			target.setOrdered(plan.isOrdered());
+		}
+		return true;
 	}
 
 	/** The Challenge Mode layout, which is fixed, so the sidebar can list chests in the order you reach them. */
 	private static final List<String> RAID_ORDER = Arrays.asList(
 		"RAIDS_START#1", "RAIDS_TEKTON#1", "RAIDS_CRABS#1", "RAIDS_ICE_DEMON#1", "RAIDS_FARMING#1", "RAIDS_SHAMANS#1",
 		"RAIDS_END#1", "RAIDS_VANGUARDS#1", "RAIDS_THIEVING#1", "RAIDS_VESPULA#1", "RAIDS_FARMING#2",
-		"RAIDS_TIGHTROPE#1", "RAIDS_GUARDIANS#1", "RAIDS_VASA#1", "RAIDS_MYSTICS#1", "RAIDS_MUTTADILES#1", "RAIDS_END#2");
+		"RAIDS_TIGHTROPE#1", "RAIDS_VASA#1", "RAIDS_MYSTICS#1", "RAIDS_MUTTADILES#1", "RAIDS_END#2");
 
 	/** Where a chest comes in the raid, for sorting; rooms the layout doesn't place go after the rest, by key. */
 	static int raidOrder(String key)
@@ -1164,6 +1190,11 @@ public class CoxStoragePlannerPlugin extends Plugin implements CoxStoragePanel.A
 		if (key.equals("RAIDS_END#2"))
 		{
 			return "Pre-Olm";
+		}
+		if (key.equals("RAIDS_TIGHTROPE#1"))
+		{
+			// the storage is in the stretch after the rope, which the plugin can't place
+			return "Post-Tightrope";
 		}
 		String[] parts = key.substring("RAIDS_".length()).split("#");
 		String[] words = parts[0].toLowerCase(Locale.ROOT).split("_");

@@ -191,6 +191,36 @@ public class ChestPlanTest
 	}
 
 	@Test
+	public void aGuardiansChestBelongsToThePostTightropeOne()
+	{
+		ChestBook book = new ChestBook();
+		book.getOrCreate("RAIDS_GUARDIANS#1", "Guardians").getWithdraw().add("Overload");
+		assertTrue(CoxStoragePlannerPlugin.retiredChests(book));
+		assertNull(book.get("RAIDS_GUARDIANS#1"));
+		assertEquals("Post-Tightrope", book.get("RAIDS_TIGHTROPE#1").getName());
+		assertEquals(Collections.singletonList("Overload"), book.get("RAIDS_TIGHTROPE#1").getWithdraw());
+
+		// into an empty one too
+		book = new ChestBook();
+		book.getOrCreate("RAIDS_TIGHTROPE#1", "Tightrope");
+		book.getOrCreate("RAIDS_GUARDIANS#1", "Guardians").getDeposit().add("Kindling");
+		assertTrue(CoxStoragePlannerPlugin.retiredChests(book));
+		assertNull(book.get("RAIDS_GUARDIANS#1"));
+		assertEquals(Collections.singletonList("Kindling"), book.get("RAIDS_TIGHTROPE#1").getDeposit());
+
+		// an empty one is just dropped; both filled in is left for the user
+		book = new ChestBook();
+		book.getOrCreate("RAIDS_TIGHTROPE#1", "Tightrope").getWithdraw().add("Overload");
+		book.getOrCreate("RAIDS_GUARDIANS#1", "Guardians");
+		book.getOrCreate("RAIDS_GUARDIANS#2", "Guardians 2").getWithdraw().add("Antidote");
+		assertTrue(CoxStoragePlannerPlugin.retiredChests(book));
+		assertNull(book.get("RAIDS_GUARDIANS#1"));
+		assertEquals(Collections.singletonList("Antidote"), book.get("RAIDS_GUARDIANS#2").getWithdraw());
+		assertEquals(Collections.singletonList("Overload"), book.get("RAIDS_TIGHTROPE#1").getWithdraw());
+		assertFalse(CoxStoragePlannerPlugin.retiredChests(book));
+	}
+
+	@Test
 	public void roomsComeFromTheTemplateChunk()
 	{
 		assertEquals("RAIDS_END", CoxStoragePlannerPlugin.roomType(chunk(3264, 5152, 0)));
@@ -199,6 +229,8 @@ public class ChestPlanTest
 		assertEquals("RAIDS_FARMING", CoxStoragePlannerPlugin.roomType(chunk(3264, 5440, 0)));
 		assertEquals("RAIDS_FARMING", CoxStoragePlannerPlugin.roomType(chunk(3264 + 40, 5440 + 8, 1)));
 		assertEquals("RAIDS_TIGHTROPE", CoxStoragePlannerPlugin.roomType(chunk(3264, 5344, 1)));
+		// Guardians has no storage, so the stretch counts as the room before it
+		assertNull(CoxStoragePlannerPlugin.roomType(chunk(3264, 5248, 2)));
 		assertEquals("RAIDS_VESPULA", CoxStoragePlannerPlugin.roomType(chunk(3264, 5280, 2)));
 		assertNull(CoxStoragePlannerPlugin.roomType(chunk(3264, 5184, 0)));
 		assertNull(CoxStoragePlannerPlugin.roomType(chunk(3264 + 96, 5152, 0)));
@@ -218,6 +250,9 @@ public class ChestPlanTest
 		assertEquals(Arrays.asList("Ice Demon", "Pre-Vanguards", "Farming 2", "Pre-Olm", "Scavengers 1"), ordered);
 		assertEquals("Farming 1", CoxStoragePlannerPlugin.chestName("RAIDS_FARMING#1"));
 		assertEquals("Ice Demon", CoxStoragePlannerPlugin.chestName("RAIDS_ICE_DEMON#1"));
+		assertEquals("Post-Tightrope", CoxStoragePlannerPlugin.chestName("RAIDS_TIGHTROPE#1"));
+		assertFalse(CoxStoragePlannerPlugin.inRaidOrder(book.all()).isEmpty());
+		assertEquals(CoxStoragePlannerPlugin.raidOrder("RAIDS_TIGHTROPE#1") + 1, CoxStoragePlannerPlugin.raidOrder("RAIDS_VASA#1"));
 		assertEquals(1, CoxStoragePlannerPlugin.floor(3));
 		assertEquals(2, CoxStoragePlannerPlugin.floor(2));
 	}
