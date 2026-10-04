@@ -468,7 +468,7 @@ class CoxStoragePanel extends PluginPanel
 		area.setWrapStyleWord(true);
 		area.setMargin(new Insets(4, 4, 4, 4));
 		area.setToolTipText("<html>One item per line, matched from the start of its name, so 'Xeric's aid' is any dose."
-			+ "<br>* and ? are wildcards: '*chinchompa', 'Dragon *'. 'Stinkhorn mushroom, 3' for a number"
+			+ "<br>* and ? are wildcards: '*chinchompa', 'Dragon *'. A comma is for a number, 'Stinkhorn mushroom, 3', not for the next item"
 			+ (deposit ? ", 'Ayak | Sang* staff*' for either, 'everything' to empty the inventory, 'everything else' to deposit what Withdraw doesn't keep"
 			: ", 'wear Scythe of vitur' for gear to put on first.<br>'Ayak | Sang* staff*' for the first of them you have,"
 			+ " 'Venator bow | *chinchompa &amp; Twisted buckler' for the bow or else the other two") + ".</html>");

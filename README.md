@@ -17,7 +17,7 @@ Plan what you deposit and withdraw at each storage unit in the Chambers of Xeric
 
 ## Writing a plan
 
-Two lists, **Deposit** and **Withdraw**, one item per line.
+Two lists, **Deposit** and **Withdraw**, **one item per line**. A comma is not a separator: it's followed by a number (`Xeric's aid, 3`), so `Overload, Xeric's aid` is an Overload with a count the plugin can't read. Each different item goes on its own line.
 
 | Line | Means |
 |---|---|
