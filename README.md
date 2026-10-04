@@ -48,7 +48,7 @@ The storage unit in your room carries a `?` while its chest still has something 
 
 ![An ordered withdrawal with Lines between clicks on](docs/lines-between-clicks.gif)
 
-*Ordered withdrawal with the* Lines between clicks *setting on (off by default): the numbered orbs run green to red and the arrows join them up.*
+*Ordered withdrawal with the* Lines between clicks *setting on: the numbered orbs run green to red and the arrows join them up.*
 
 ## Organise the inventory
 
@@ -77,7 +77,7 @@ A grid below shows what each party member holds (needs the core Party plugin): `
 | Glow colour / next click colour / end colour / wear colour | yellow / green / red / purple |
 | Outline thickness | 1.5 |
 | Pulse | on |
-| Lines between clicks | off |
+| Lines between clicks | on |
 | **Sidebar** | |
 | Hide away from the Chambers | on |
 | Always hide the sidebar icon | off |
@@ -89,6 +89,9 @@ A grid below shows what each party member holds (needs the core Party plugin): `
 | Count split overloads | on |
 
 ## Changelog
+
+1.3.17
+- *Lines between clicks* is on by default.
 
 1.3.16
 - Items listed with commas on one line (`Overload, Xeric's aid, 3`) are read as separate items: a comma is for a number, and one followed by anything else starts the next item. The list hover text says so.

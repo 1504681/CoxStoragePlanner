@@ -213,7 +213,7 @@ public interface CoxStoragePlannerConfig extends Config
 	)
 	default boolean chestGlowPath()
 	{
-		return false;
+		return true;
 	}
 
 	@ConfigItem(
