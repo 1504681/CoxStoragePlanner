@@ -46,6 +46,10 @@ While its storage is open a chest goes through three phases:
 
 The storage unit in your room carries a `?` while its chest still has something to do and a green tick once your inventory has it all.
 
+![An ordered withdrawal with Lines between clicks on](https://i.imgur.com/2m6ab4d.gif)
+
+*Ordered withdrawal with the* Lines between clicks *setting on (off by default): the numbered orbs run green to red and the arrows join them up.*
+
 ## Organise the inventory
 
 On by default. With an ordered list, click 1 belongs in the first inventory slot the plan may use, click 2 in the next, and so on (slots holding something neither list mentions are skipped). An item of the list sitting in the wrong slot glows to go back in and comes out again in its turn (`redeposit: Elder maul (wrong slot)` in the sidebar). Two neighbours the wrong way round, and the end of the list already carried in order further down, are left alone.
