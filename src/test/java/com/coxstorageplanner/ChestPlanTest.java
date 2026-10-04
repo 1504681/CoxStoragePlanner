@@ -191,6 +191,21 @@ public class ChestPlanTest
 	}
 
 	@Test
+	public void commasBetweenItemsListSeveral()
+	{
+		assertEquals(Arrays.asList("Overload", "Xeric's aid, 3", "Prayer enhance"), ChestPlan.items("Overload, Xeric's aid, 3, Prayer enhance"));
+		assertEquals(Collections.singletonList("Stinkhorn mushroom, 3"), ChestPlan.items("Stinkhorn mushroom, 3"));
+		assertEquals(Collections.singletonList("Xeric's aid,"), ChestPlan.items("Xeric's aid, "));
+		assertEquals(Arrays.asList("Venator bow | *chinchompa, 500 & Twisted buckler", "Overload"),
+			ChestPlan.items("Venator bow | *chinchompa, 500 & Twisted buckler, Overload"));
+		List<ChestPlan.Line> lines = ChestPlan.parse(Collections.singletonList("Overload,Xeric's aid, 2"));
+		assertEquals(2, lines.size());
+		assertEquals("Overload", lines.get(0).name);
+		assertEquals("Xeric's aid", lines.get(1).name);
+		assertEquals(2, lines.get(1).count);
+	}
+
+	@Test
 	public void aGuardiansChestBelongsToThePostTightropeOne()
 	{
 		ChestBook book = new ChestBook();

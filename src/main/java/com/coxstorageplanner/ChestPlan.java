@@ -262,9 +262,35 @@ public final class ChestPlan
 		List<Line> parsed = new ArrayList<>();
 		for (String line : lines)
 		{
-			parsed.add(new Line(line));
+			for (String item : items(line))
+			{
+				parsed.add(new Line(item));
+			}
 		}
 		return parsed;
+	}
+
+	/**
+	 * The items on a line: one, unless commas were used to list several. A comma is for a number
+	 * ("Xeric's aid, 3"), so one followed by anything but a number starts the next item: "Overload, Xeric's aid, 3"
+	 * is an Overload and three aids.
+	 */
+	static List<String> items(String line)
+	{
+		List<String> items = new ArrayList<>();
+		StringBuilder item = new StringBuilder();
+		for (String part : line.split(",", -1))
+		{
+			// a number, which may go on with the next choice: "*chinchompa, 500 & Twisted buckler"
+			if (item.length() > 0 && !part.trim().isEmpty() && !part.trim().matches("\\d+(\\s*[&|].*)?"))
+			{
+				items.add(item.toString().trim());
+				item.setLength(0);
+			}
+			item.append(item.length() == 0 ? "" : ",").append(part);
+		}
+		items.add(item.toString().trim());
+		return items;
 	}
 
 	/**

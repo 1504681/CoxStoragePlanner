@@ -17,7 +17,7 @@ Plan what you deposit and withdraw at each storage unit in the Chambers of Xeric
 
 ## Writing a plan
 
-Two lists, **Deposit** and **Withdraw**, **one item per line**. A comma is not a separator: it's followed by a number (`Xeric's aid, 3`), so `Overload, Xeric's aid` is an Overload with a count the plugin can't read. Each different item goes on its own line.
+Two lists, **Deposit** and **Withdraw**, **one item per line**. A comma is not a separator: it's followed by a number (`Xeric's aid, 3`), and each different item goes on its own line. If you list items with commas anyway (`Overload, Xeric's aid, 3`), a comma that isn't followed by a number is taken as the start of the next item.
 
 | Line | Means |
 |---|---|
@@ -89,6 +89,10 @@ A grid below shows what each party member holds (needs the core Party plugin): `
 | Count split overloads | on |
 
 ## Changelog
+
+1.3.16
+- Items listed with commas on one line (`Overload, Xeric's aid, 3`) are read as separate items: a comma is for a number, and one followed by anything else starts the next item. The list hover text says so.
+- README: a quick start, a syntax table and a gif.
 
 1.3.15
 - A click on an item scrolled out of view gets its orb pinned to the edge of the storage it's beyond, with a point showing which way to scroll, and the lines between clicks run on to it.
