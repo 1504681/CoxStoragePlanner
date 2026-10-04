@@ -22,7 +22,7 @@ Two lists, **Deposit** and **Withdraw**, **one item per line**. A comma is not a
 | Line | Means |
 |---|---|
 | `Xeric's aid` | matched from the start of the name, so any dose |
-| `*chinchompa`, `Dragon *` | `*` and `?` are wildcards |
+| `*chinchompa` or `Dragon *` | `*` and `?` are wildcards |
 | `Stinkhorn mushroom, 3` | that many; a stack of 14 counts as 14 |
 | `wear Scythe of vitur` | Withdraw: gear to put on, wherever it is |
 | `Venator bow \| *chinchompa & Twisted buckler` | Withdraw: choices by priority. The first choice you have, on you or in the storage, is the one asked for; `&` puts several items in a choice, each with its own count |
