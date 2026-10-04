@@ -46,7 +46,7 @@ While its storage is open a chest goes through three phases:
 
 The storage unit in your room carries a `?` while its chest still has something to do and a green tick once your inventory has it all.
 
-![An ordered withdrawal with Lines between clicks on](https://i.imgur.com/2m6ab4d.gif)
+![An ordered withdrawal with Lines between clicks on](docs/lines-between-clicks.gif)
 
 *Ordered withdrawal with the* Lines between clicks *setting on (off by default): the numbered orbs run green to red and the arrows join them up.*
 
