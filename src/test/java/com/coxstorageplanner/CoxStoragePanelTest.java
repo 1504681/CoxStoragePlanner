@@ -37,6 +37,11 @@ public class CoxStoragePanelTest
 		}
 
 		@Override
+		public void setChestTopUp(String key, boolean topUp)
+		{
+		}
+
+		@Override
 		public void setChestLines(String key, boolean deposit, String text)
 		{
 		}

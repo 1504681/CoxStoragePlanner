@@ -43,9 +43,17 @@ public final class ChestPlan
 		final List<List<Line>> options;
 		/** Whether the choices are one item each under one count, so that any mix of them makes up the number. */
 		final boolean either;
+		/** The line this one is a dose window of ({@link #doses}), null for a line as written. */
+		private final Line base;
+		/** With a base: the doses this line takes, inclusive. */
+		private final int minDose;
+		private final int maxDose;
 
 		Line(String text)
 		{
+			this.base = null;
+			this.minDose = 0;
+			this.maxDose = Integer.MAX_VALUE;
 			this.text = text;
 			String lower = text.toLowerCase(Locale.ROOT);
 			everything = lower.equals(EVERYTHING) || lower.equals("*") || lower.equals("all");
@@ -141,6 +149,35 @@ public final class ChestPlan
 			}
 		}
 
+		/**
+		 * A copy taking only the potions of this line whose dose is within a window, and nothing without a dose.
+		 *
+		 * @param text what the copy reads as, null to keep this line's
+		 * @param count how many it asks for; whether it says so follows {@code counted}
+		 */
+		Line doses(int minDose, int maxDose, String text, int count, boolean counted)
+		{
+			return new Line(this, minDose, maxDose, text == null ? this.text : text, count, counted);
+		}
+
+		private Line(Line base, int minDose, int maxDose, String text, int count, boolean counted)
+		{
+			this.base = base;
+			this.minDose = minDose;
+			this.maxDose = maxDose;
+			this.text = text;
+			this.name = base.name;
+			this.count = count;
+			this.counted = counted;
+			this.everything = false;
+			this.everythingElse = false;
+			this.wear = base.wear;
+			this.names = base.names;
+			this.patterns = base.patterns;
+			this.options = base.options;
+			this.either = base.either;
+		}
+
 		/** Whether the line is a plain name: no wildcards, no "|", no "&". */
 		boolean plain()
 		{
@@ -168,6 +205,11 @@ public final class ChestPlan
 			{
 				return false;
 			}
+			if (base != null)
+			{
+				int dose = ChestProgress.dose(itemName);
+				return dose >= minDose && dose <= maxDose && base.matches(itemName);
+			}
 			String lower = itemName.toLowerCase(Locale.ROOT);
 			for (int i = 0; i < names.size(); i++)
 			{
@@ -192,6 +234,8 @@ public final class ChestPlan
 	private List<String> deposit = new ArrayList<>();
 	private List<String> withdraw = new ArrayList<>();
 	private boolean ordered;
+	/** Whether a potion on the take-out list is swapped for a fuller dose the storage has ({@link ChestProgress#topUp}). */
+	private boolean topUp;
 
 	public ChestPlan()
 	{
@@ -226,6 +270,16 @@ public final class ChestPlan
 	public void setOrdered(boolean ordered)
 	{
 		this.ordered = ordered;
+	}
+
+	public boolean isTopUp()
+	{
+		return topUp;
+	}
+
+	public void setTopUp(boolean topUp)
+	{
+		this.topUp = topUp;
 	}
 
 	public List<String> getDeposit()

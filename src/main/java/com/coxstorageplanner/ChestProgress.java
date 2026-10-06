@@ -244,8 +244,12 @@ public final class ChestProgress
 		this.free = carried == null ? -1 : carried.free;
 		Map<String, Integer> held = storage == null ? Collections.emptyMap() : storage;
 		List<ChestPlan.Line> takeOut = settle(ChestPlan.parse(plan.getWithdraw()), inventory, worn, storage);
-		this.takeOut = takeOut;
 		List<ChestPlan.Line> putIn = ChestPlan.parse(plan.getDeposit());
+		if (plan.isTopUp())
+		{
+			takeOut = topUp(takeOut, putIn, inventory, worn, storage);
+		}
+		this.takeOut = takeOut;
 		List<Step> wears = new ArrayList<>();
 		boolean carries = false;
 		for (ChestPlan.Line line : takeOut)
@@ -546,7 +550,117 @@ public final class ChestProgress
 		return settled;
 	}
 
-	/** Whether the take-out list keeps an item, so "everything else" leaves it alone. */
+	/**
+	 * The take-out list with its potions swapped for fuller doses. A potion line's number is made up of the
+	 * best doses to be had, on you or in the storage (a carried dose over the same dose in there), so when the
+	 * storage holds a fuller dose than one you carry, the carried one goes in (a deposit added to {@code putIn},
+	 * reading "Overload (1/2)") and the line takes only doses from the fullest kept down, so "Overload, 1" with
+	 * an Overload (2) carried and a (4) in the storage is put the (2) in, take the (4) out. Lines of the same
+	 * name pool their numbers. A line changes only when a swap comes of it, only when all its items are potions,
+	 * and only once the storage has been seen.
+	 */
+	static List<ChestPlan.Line> topUp(List<ChestPlan.Line> takeOut, List<ChestPlan.Line> putIn, Map<String, Integer> inventory,
+		Map<String, Integer> worn, Map<String, Integer> storage)
+	{
+		if (storage == null)
+		{
+			return takeOut;
+		}
+		List<ChestPlan.Line> lines = new ArrayList<>(takeOut);
+		Set<String> seen = new java.util.HashSet<>();
+		for (int i = 0; i < lines.size(); i++)
+		{
+			ChestPlan.Line line = lines.get(i);
+			if (!swappable(line) || !seen.add(line.name.toLowerCase(java.util.Locale.ROOT)) || count(line, worn) > 0)
+			{
+				continue;
+			}
+			List<Integer> group = new ArrayList<>();
+			int want = 0;
+			for (int j = i; j < lines.size(); j++)
+			{
+				if (swappable(lines.get(j)) && lines.get(j).name.equalsIgnoreCase(line.name))
+				{
+					group.add(j);
+					want += lines.get(j).count;
+				}
+			}
+			List<Integer> carried = doses(line, inventory);
+			List<Integer> stored = doses(line, storage);
+			if (carried == null || stored == null || stored.isEmpty())
+			{
+				continue;
+			}
+			// the best doses of the lot: the fullest first, a carried one before the same dose in the storage
+			int c = 0;
+			int s = 0;
+			int floor = -1;
+			for (int u = 0; u < want && (c < carried.size() || s < stored.size()); u++)
+			{
+				if (s >= stored.size() || (c < carried.size() && carried.get(c) >= stored.get(s)))
+				{
+					floor = carried.get(c++);
+				}
+				else
+				{
+					floor = stored.get(s++);
+				}
+			}
+			if (s == 0 || c >= carried.size() || carried.get(c) >= floor)
+			{
+				continue;
+			}
+			StringBuilder out = new StringBuilder();
+			for (int k = carried.size() - 1; k >= c; k--)
+			{
+				if (out.length() == 0 || !carried.get(k).equals(carried.get(k + 1)))
+				{
+					out.append(out.length() == 0 ? "" : "/").append(carried.get(k));
+				}
+			}
+			for (int j : group)
+			{
+				ChestPlan.Line member = lines.get(j);
+				lines.set(j, member.doses(floor, Integer.MAX_VALUE, null, member.count, member.counted));
+			}
+			putIn.add(line.doses(0, floor - 1, line.name + " (" + out + ")", 1, false));
+		}
+		return lines;
+	}
+
+	/** Whether {@link #topUp} may change a take-out line: one item to carry, as written. */
+	private static boolean swappable(ChestPlan.Line line)
+	{
+		return !line.wear && !line.everything && !line.everythingElse && line.options.isEmpty();
+	}
+
+	/**
+	 * The doses of a line's items in a container, one per unit, the fullest first; null when an item there
+	 * has no dose, so the line isn't about potions.
+	 */
+	private static List<Integer> doses(ChestPlan.Line line, Map<String, Integer> items)
+	{
+		List<Integer> doses = new ArrayList<>();
+		for (Map.Entry<String, Integer> e : items.entrySet())
+		{
+			if (e.getValue() > 0 && line.matches(e.getKey()))
+			{
+				int dose = dose(e.getKey());
+				if (dose < 0)
+				{
+					return null;
+				}
+				for (int u = 0; u < e.getValue(); u++)
+				{
+					doses.add(dose);
+				}
+			}
+		}
+		doses.sort(Collections.reverseOrder());
+		return doses;
+	}
+
+	/** Whether the take-out list keeps an item, so "everything else" leaves it alone. A dose swapped out isn't kept. */
 	static boolean keeps(List<ChestPlan.Line> takeOut, String itemName)
 	{
 		for (ChestPlan.Line line : takeOut)

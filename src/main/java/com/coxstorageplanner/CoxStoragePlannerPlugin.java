@@ -76,7 +76,7 @@ import net.runelite.client.util.Text;
 public class CoxStoragePlannerPlugin extends Plugin implements CoxStoragePanel.Actions
 {
 	// keep in sync with build.gradle
-	public static final String VERSION = "1.3.17";
+	public static final String VERSION = "1.3.18";
 
 	/** Ticks outside before a raid counts as left, so a relog or a reload doesn't wipe the raid's state. */
 	private static final int LEAVE_TICKS = 5;
@@ -1092,6 +1092,7 @@ public class CoxStoragePlannerPlugin extends Plugin implements CoxStoragePanel.A
 					moved.getDeposit().addAll(plan.getDeposit());
 					moved.getWithdraw().addAll(plan.getWithdraw());
 					moved.setOrdered(plan.isOrdered());
+					moved.setTopUp(plan.isTopUp());
 				}
 				changed = true;
 			}
@@ -1154,6 +1155,7 @@ public class CoxStoragePlannerPlugin extends Plugin implements CoxStoragePanel.A
 			target.getDeposit().addAll(plan.getDeposit());
 			target.getWithdraw().addAll(plan.getWithdraw());
 			target.setOrdered(plan.isOrdered());
+			target.setTopUp(plan.isTopUp());
 		}
 		return true;
 	}
@@ -1541,6 +1543,22 @@ public class CoxStoragePlannerPlugin extends Plugin implements CoxStoragePanel.A
 			if (plan != null && plan.isOrdered() != ordered)
 			{
 				plan.setOrdered(ordered);
+				saveChests();
+				updateOpenChest();
+				refresh();
+			}
+		});
+	}
+
+	@Override
+	public void setChestTopUp(String key, boolean topUp)
+	{
+		clientThread.invokeLater(() ->
+		{
+			ChestPlan plan = book().get(key);
+			if (plan != null && plan.isTopUp() != topUp)
+			{
+				plan.setTopUp(topUp);
 				saveChests();
 				updateOpenChest();
 				refresh();

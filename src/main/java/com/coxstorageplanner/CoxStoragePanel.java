@@ -43,6 +43,8 @@ class CoxStoragePanel extends PluginPanel
 
 		void setChestOrdered(String key, boolean ordered);
 
+		void setChestTopUp(String key, boolean topUp);
+
 		/** Replaces a chest's deposit (true) or withdraw (false) list with the lines of the text. */
 		void setChestLines(String key, boolean deposit, String text);
 
@@ -123,6 +125,7 @@ class CoxStoragePanel extends PluginPanel
 	private final Stack chestsBody = new Stack(ColorScheme.DARKER_GRAY_COLOR);
 	private final JComboBox<String> chestChooser = new JComboBox<>();
 	private final JCheckBox chestOrdered = new JCheckBox("Ordered withdrawal");
+	private final JCheckBox chestTopUp = new JCheckBox("Swap for fuller potions");
 	private final JTextArea chestDeposit = new JTextArea(2, 10);
 	private final JTextArea chestWithdraw = new JTextArea(3, 10);
 	/** What goes in and what comes out, as icons. */
@@ -423,6 +426,15 @@ class CoxStoragePanel extends PluginPanel
 				actions.setChestOrdered(selectedChest, chestOrdered.isSelected());
 			}
 		});
+		check(chestTopUp, "<html>A potion on the Withdraw list that the storage has a fuller dose of: the one you carry goes in<br>"
+			+ "and the fuller one comes out, so you leave with the best doses to be had</html>");
+		chestTopUp.addActionListener(e ->
+		{
+			if (!updating && selectedChest != null)
+			{
+				actions.setChestTopUp(selectedChest, chestTopUp.isSelected());
+			}
+		});
 
 		Stack editor = new Stack(null);
 		editor.addRow(chooser, 0);
@@ -430,6 +442,7 @@ class CoxStoragePanel extends PluginPanel
 		editor.addRow(text("Deposit", ColorScheme.BRAND_ORANGE), 2);
 		editor.addRow(listArea(chestDeposit, true), 3);
 		editor.addRow(chestOrdered, 8);
+		editor.addRow(chestTopUp, 0);
 		JPanel takeOut = new JPanel(new BorderLayout());
 		takeOut.setOpaque(false);
 		takeOut.add(text("Withdraw", ColorScheme.BRAND_ORANGE), BorderLayout.WEST);
@@ -563,6 +576,7 @@ class CoxStoragePanel extends PluginPanel
 			chestChooser.setSelectedIndex(index);
 		}
 		chestOrdered.setSelected(plan.isOrdered());
+		chestTopUp.setSelected(plan.isTopUp());
 		setIfIdle(chestDeposit, String.join("\n", plan.getDeposit()));
 		setIfIdle(chestWithdraw, String.join("\n", plan.getWithdraw()));
 		showFlow(plan, state);
