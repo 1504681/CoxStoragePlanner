@@ -30,7 +30,7 @@ Two lists, **Deposit** and **Withdraw**, **one item per line**. A comma is not a
 
 - A Deposit line without a number means all of them; with one, the step is done once that many went in (or the storage already holds them). A Withdraw line is done when inventory and worn gear together hold that many.
 - A line whose item is nowhere, not on you and not in the storage, is skipped. Potions light fullest first. The same item on a later line means one more of it.
-- **Swap for fuller potions** (per chest, for the one before Olm): a potion on the Withdraw list that the storage has a fuller dose of is swapped, the one you carry goes in and the fuller one comes out, so `Overload, 1` with an Overload (2) carried and a (4) in the storage is "put the (2) in, take the (4)". You leave with the best doses on you or in there; a carried dose is kept over the same dose in the storage.
+- **Swap for fuller potions** (per chest, for the one before Olm): a potion on the Withdraw list that the storage has a fuller dose of is swapped, the one you carry goes in and the fuller one comes out, so `Overload, 1` with an Overload (2) carried and a (4) in the storage is "put the (2) in, take the (4)". You leave with the best doses on you or in there; a carried dose is kept over the same dose in the storage, and a carried dose below the ones kept goes in. When there aren't enough full doses, the partial doses get decanted: the ones in the storage that make up the difference are withdrawn (a line at the end of the list, `Xeric's aid (2/3)`), an arrow in the inventory shows which potion to use on which (close the storage to do it), and what's left over goes back in before the rest comes out.
 - **Mark by clicking**: tick it, then left-click an item in the storage to add it to Withdraw or one in the side inventory to add it to Deposit. Each click adds one more (three clicks on a stinkhorn make `Stinkhorn mushroom, 3`), and the order you click is the withdraw order. `Unmark` on the right-click menu takes one away. It switches itself off when you leave the raid.
 - Under the lists the plan is shown as item icons (once the plugin has seen the items in a raid).
 
@@ -90,6 +90,9 @@ A grid below shows what each party member holds (needs the core Party plugin): `
 | Count split overloads | on |
 
 ## Changelog
+
+1.3.19
+- *Swap for fuller potions* decants: short of full doses, the partial doses in the storage are withdrawn, an arrow shows which potion to use on which, and what's left over goes back in. A carried dose below the ones kept goes in even when nothing comes out for it.
 
 1.3.18
 - *Swap for fuller potions*, a tick per chest: a potion on the Withdraw list that the storage has a fuller dose of goes in and the fuller one comes out.

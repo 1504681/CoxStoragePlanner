@@ -604,6 +604,7 @@ class CoxStoragePanel extends PluginPanel
 			ChestProgress.Phase phase = progress.phase();
 			String now = progress.blocked || progress.isDone() ? null
 				: phase == ChestProgress.Phase.MOVE ? "Now: drag along the arrow"
+				: phase == ChestProgress.Phase.MIX ? "Now: use the potion along the arrow on the other"
 				: !state.storageOpen ? null
 				: phase == ChestProgress.Phase.WEAR ? "Now: put on the outlined gear"
 				: phase == ChestProgress.Phase.DEPOSIT ? "Now: deposit what's outlined"
@@ -612,6 +613,11 @@ class CoxStoragePanel extends PluginPanel
 			if (now != null)
 			{
 				chestSteps.addRow(stepRow(now, WARN), 0);
+			}
+			ChestProgress.Mix mix = progress.mix();
+			if (mix != null)
+			{
+				chestSteps.addRow(stepRow("→ mix: " + mix.from + " on " + mix.to, WARN), 0);
 			}
 			boolean first = true;
 			for (int[] move : progress.drags())

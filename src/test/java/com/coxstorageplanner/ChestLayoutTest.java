@@ -33,6 +33,7 @@ public class ChestLayoutTest
 		int deposits;
 		int withdrawals;
 		int drags;
+		int mixes;
 		/** How often the plan went from putting in to taking out. */
 		int rounds;
 
@@ -141,6 +142,22 @@ public class ChestLayoutTest
 				if (progress.isDone() || progress.blocked)
 				{
 					return progress;
+				}
+				if (progress.phase() == ChestProgress.Phase.MIX)
+				{
+					last = progress.phase();
+					ChestProgress.Mix mix = progress.mix();
+					int from = progress.moveFrom();
+					int to = progress.moveTo();
+					assertEquals(slots[from], mix.from);
+					assertEquals(slots[to], mix.to);
+					assertEquals(slots[from], progress.moveName());
+					int doses = ChestProgress.dose(slots[from]) + ChestProgress.dose(slots[to]);
+					slots[to] = slots[to].substring(0, slots[to].length() - 2) + Math.min(4, doses) + ")";
+					slots[from] = doses > 4 ? slots[from].substring(0, slots[from].length() - 2) + (doses - 4) + ")" : null;
+					quantities[from] = doses > 4 ? 1 : 0;
+					mixes++;
+					continue;
 				}
 				if (progress.phase() == ChestProgress.Phase.MOVE)
 				{
@@ -1029,17 +1046,26 @@ public class ChestLayoutTest
 	{
 		ChestPlan plan = plan(null, "Twisted bow", "Overload, 1", "Xeric's aid, 2");
 		plan.setTopUp(true);
-		// nothing fuller in the storage: no swap, and the extra (1) stays as it would without the setting
-		Game game = new Game(plan, 25, Collections.emptySet(), "Twisted bow", "Overload (+)(3)", "Xeric's aid(4)", "Xeric's aid(2)", "Xeric's aid(1)")
-			.store("Overload (+)(3)", 1).store("Xeric's aid(2)", 2);
-		ChestProgress progress = game.progress();
-		assertTrue(progress.isDone());
-		assertEquals(0, progress.deposits.size());
-
 		// the same dose in the storage as carried: kept, not swapped
-		game = new Game(plan, 25, Collections.emptySet(), "Twisted bow", "Overload (+)(4)", "Xeric's aid(4)", "Xeric's aid(4)")
+		Game game = new Game(plan, 25, Collections.emptySet(), "Twisted bow", "Overload (+)(4)", "Xeric's aid(4)", "Xeric's aid(4)")
 			.store("Overload (+)(4)", 3).store("Xeric's aid(4)", 3);
 		assertTrue(game.progress().isDone());
+
+		// a partial dose with nothing to top it up from stays
+		game = new Game(plan, 25, Collections.emptySet(), "Twisted bow", "Overload (+)(3)", "Xeric's aid(4)", "Xeric's aid(2)");
+		assertTrue(game.progress().isDone());
+
+		// a dose below the ones kept goes in even with nothing to take for it
+		game = new Game(plan, 25, Collections.emptySet(), "Twisted bow", "Overload (+)(4)", "Overload (+)(1)", "Xeric's aid(4)", "Xeric's aid(4)")
+			.store("Overload (+)(1)", 1);
+		ChestProgress progress = game.progress();
+		assertEquals(ChestProgress.Phase.DEPOSIT, progress.phase());
+		assertEquals("Overload (1)", progress.deposits.get(0).line.text);
+		assertTrue(progress.depositsSlot(2, "Overload (+)(1)"));
+		assertTrue(game.play().isDone());
+		assertEquals(Arrays.asList("Twisted bow", "Overload (+)(4)", null, "Xeric's aid(4)", "Xeric's aid(4)"), game.carried());
+		assertEquals(1, game.deposits);
+		assertEquals(0, game.withdrawals + game.mixes);
 
 		// the setting off: the (2) is as good as any
 		plan.setTopUp(false);
@@ -1062,39 +1088,105 @@ public class ChestLayoutTest
 		storage.put("Overload (+)(4)", 1);
 		storage.put("Xeric's aid(4)", 1);
 		storage.put("Xeric's aid(3)", 1);
-		// the two overload lines pool their number: (4) and (3) are the best two, so only the (1) goes
+		// the two overload lines pool their number: (4) and (3) would do, but the (1) on the (3) is a (4) in one click
 		ChestProgress progress = new ChestProgress(plan, inventory, Collections.emptyMap(), inventory, storage);
-		assertEquals(ChestProgress.Phase.DEPOSIT, progress.phase());
-		assertTrue(progress.highlightsDeposit("Overload (+)(1)"));
-		assertFalse(progress.highlightsDeposit("Overload (+)(3)"));
-		assertTrue(progress.highlightsDeposit("Xeric's aid(2)"));
+		assertEquals(ChestProgress.Phase.MIX, progress.phase());
+		assertEquals("Overload (+)(1)", progress.mix().from);
+		assertEquals("Overload (+)(3)", progress.mix().to);
+		assertEquals(-1, progress.moveFrom());
+		assertFalse(progress.highlightsDeposit("Overload (+)(1)"));
 		assertFalse(progress.isStocked());
 
-		inventory.remove("Overload (+)(1)");
-		inventory.remove("Xeric's aid(2)");
-		storage.put("Overload (+)(1)", 1);
-		storage.put("Xeric's aid(2)", 2);
+		// mixed: the aids are next, the two (2)s make a (4)
+		inventory.clear();
+		inventory.put("Overload (+)(4)", 1);
+		inventory.put("Xeric's aid(2)", 2);
+		progress = new ChestProgress(plan, inventory, Collections.emptyMap(), inventory, storage);
+		assertEquals(ChestProgress.Phase.MIX, progress.phase());
+		assertEquals("Xeric's aid(2)", progress.mix().from);
+		assertEquals("Xeric's aid(2)", progress.mix().to);
+
+		// one (4) aid carried: the (4) in the storage is the other, the (3) waits for it and the overload (4) is taken
+		inventory.put("Xeric's aid(2)", 0);
+		inventory.put("Xeric's aid(4)", 1);
 		progress = new ChestProgress(plan, inventory, Collections.emptyMap(), inventory, storage);
 		assertEquals(ChestProgress.Phase.WITHDRAW, progress.phase());
 		assertTrue(progress.wantsNext("Overload (+)(4)"));
-		assertFalse(progress.wantsNext("Overload (+)(1)"));
 		assertTrue(progress.wantsNext("Xeric's aid(4)"));
-		// the (3) is the line's too, but it waits for the (4) as potions always do; the (2) is below the line now
 		assertFalse(progress.wantsNext("Xeric's aid(3)"));
-		assertFalse(progress.wantsNext("Xeric's aid(2)"));
-		storage.remove("Xeric's aid(4)");
-		progress = new ChestProgress(plan, inventory, Collections.emptyMap(), inventory, storage);
-		assertTrue(progress.wantsNext("Xeric's aid(3)"));
-		assertFalse(progress.wantsNext("Xeric's aid(2)"));
-		storage.put("Xeric's aid(4)", 1);
+		assertEquals(1, progress.deposits.size());
 
-		inventory.put("Overload (+)(4)", 1);
-		inventory.put("Xeric's aid(4)", 1);
-		inventory.put("Xeric's aid(3)", 1);
+		inventory.put("Overload (+)(4)", 2);
+		inventory.put("Xeric's aid(4)", 2);
 		storage.remove("Overload (+)(4)");
 		storage.remove("Xeric's aid(4)");
-		storage.remove("Xeric's aid(3)");
 		progress = new ChestProgress(plan, inventory, Collections.emptyMap(), inventory, storage);
 		assertTrue(progress.isDone());
+	}
+
+	@Test
+	public void topUpDecantsWhenTheStorageIsShortOfFullDoses()
+	{
+		ChestPlan plan = plan(null, "Twisted bow", "Overload, 1", "Xeric's aid, 3", "Dragon claws");
+		plan.setTopUp(true);
+		// one (4) aid in there and partial doses worth two more: take the partials, mix them, put the dregs back
+		Game game = new Game(plan, 25, Collections.emptySet(), "Twisted bow", "Overload (+)(2)", "Xeric's aid(4)", null, null, "Dragon claws")
+			.store("Overload (+)(1)", 1).store("Overload (+)(2)", 1).store("Xeric's aid(4)", 1).store("Xeric's aid(3)", 1)
+			.store("Xeric's aid(2)", 2).store("Xeric's aid(1)", 1);
+		ChestProgress progress = game.progress();
+		assertEquals(ChestProgress.Phase.WITHDRAW, progress.phase());
+		assertEquals(6, progress.withdrawals.size());
+		assertEquals("Overload (2)", progress.withdrawals.get(4).line.text);
+		assertEquals("Xeric's aid (2/3)", progress.withdrawals.get(5).line.text);
+		// the (4) aid first, then the partial doses, fullest first
+		assertTrue(progress.wantsNext("Xeric's aid(4)"));
+		assertFalse(progress.wantsNext("Xeric's aid(3)"));
+		progress = game.play();
+		assertTrue(progress.isDone());
+		assertEquals(Arrays.asList("Twisted bow", "Overload (+)(4)", "Xeric's aid(4)", "Xeric's aid(4)", "Xeric's aid(4)", "Dragon claws"), game.carried());
+		// the (2) on the carried (2) overload; the (3) and a (2) aid taken, the (2) on the (3), and the (1) that leaves put back
+		assertEquals(2, game.mixes);
+		assertEquals(4, game.withdrawals);
+		assertEquals(1, game.deposits);
+		assertEquals(Integer.valueOf(2), game.storage.get("Xeric's aid(1)"));
+		assertEquals(Integer.valueOf(1), game.storage.get("Xeric's aid(2)"));
+		assertEquals(Integer.valueOf(1), game.storage.get("Overload (+)(1)"));
+		assertEquals(3, game.storage.size());
+	}
+
+	@Test
+	public void topUpMixesWhatIsCarriedFirst()
+	{
+		ChestPlan plan = plan(null, "Overload, 1");
+		plan.setTopUp(true);
+		Game game = new Game(plan, 25, Collections.emptySet(), "Overload (+)(1)", "Twisted bow", "Overload (+)(2)").store("Overload (+)(1)", 1);
+		ChestProgress progress = game.progress();
+		assertEquals(ChestProgress.Phase.MIX, progress.phase());
+		assertEquals(2, progress.moveFrom());
+		assertEquals(0, progress.moveTo());
+		assertEquals("Overload (+)(2)", progress.mix().from);
+		assertEquals("Overload (+)(1)", progress.mix().to);
+		assertFalse(progress.isDone());
+		assertFalse(progress.isStocked());
+		progress = game.play();
+		assertTrue(progress.isDone());
+		assertEquals(Arrays.asList("Overload (+)(4)", "Twisted bow"), game.carried().stream().filter(n -> n != null).sorted().collect(java.util.stream.Collectors.toList()));
+		assertEquals(2, game.mixes);
+		assertEquals(1, game.withdrawals);
+		assertEquals(0, game.deposits);
+		assertTrue(game.storage.isEmpty());
+
+		// a (4) in the storage: no mixing, the dregs go in for it
+		game = new Game(plan, 25, Collections.emptySet(), "Overload (+)(1)", "Twisted bow", "Overload (+)(2)").store("Overload (+)(4)", 1);
+		assertEquals(ChestProgress.Phase.DEPOSIT, game.progress().phase());
+		assertTrue(game.play().isDone());
+		assertEquals(Arrays.asList("Overload (+)(4)", "Twisted bow"), game.carried());
+		assertEquals(0, game.mixes);
+		assertEquals(2, game.deposits);
+		assertEquals(1, game.withdrawals);
+
+		// nothing to gain by mixing: enough doses only for the one (3)
+		game = new Game(plan, 25, Collections.emptySet(), "Overload (+)(3)", "Twisted bow").store("Overload (+)(2)", 0);
+		assertTrue(game.progress().isDone());
 	}
 }

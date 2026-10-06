@@ -89,7 +89,28 @@ public final class ChestProgress
 	{
 		WEAR, DEPOSIT, WITHDRAW,
 		/** Drag an item to the slot it belongs in. */
-		MOVE
+		MOVE,
+		/** Use a potion on another of its kind, to make a fuller dose. */
+		MIX
+	}
+
+	/** Two partial doses of a potion carried, to use one on the other ({@link #topUp}). */
+	public static final class Mix
+	{
+		/** The potion to use, and the one to use it on. */
+		public final String from;
+		public final String to;
+		/** Their inventory slots, -1 without the slots. */
+		public final int fromSlot;
+		public final int toSlot;
+
+		private Mix(String from, String to, int fromSlot, int toSlot)
+		{
+			this.from = from;
+			this.to = to;
+			this.fromSlot = fromSlot;
+			this.toSlot = toSlot;
+		}
 	}
 
 	/** The inventory slot by slot, and how the storage stands. */
@@ -184,6 +205,8 @@ public final class ChestProgress
 	/** What the storage holds, null when the client hasn't seen it. */
 	private final Map<String, Integer> storage;
 	private final List<ChestPlan.Line> takeOut;
+	/** A potion to use on another before anything else, null for none. */
+	private final Mix mix;
 	private final Phase phase;
 	/** The plan slot by slot, null when it goes by counts. */
 	private final ChestLayout layout;
@@ -245,10 +268,14 @@ public final class ChestProgress
 		Map<String, Integer> held = storage == null ? Collections.emptyMap() : storage;
 		List<ChestPlan.Line> takeOut = settle(ChestPlan.parse(plan.getWithdraw()), inventory, worn, storage);
 		List<ChestPlan.Line> putIn = ChestPlan.parse(plan.getDeposit());
+		Mix mix = null;
 		if (plan.isTopUp())
 		{
-			takeOut = topUp(takeOut, putIn, inventory, worn, storage);
+			TopUp swapped = topUp(takeOut, putIn, inventory, worn, storage, carried);
+			takeOut = swapped.lines;
+			mix = swapped.mix;
 		}
+		this.mix = mix;
 		this.takeOut = takeOut;
 		List<Step> wears = new ArrayList<>();
 		boolean carries = false;
@@ -497,7 +524,8 @@ public final class ChestProgress
 		}
 		this.withdrawing = round;
 		this.blocked = stuck;
-		this.phase = !allDone(wears) ? Phase.WEAR : layout != null && layout.moving ? Phase.MOVE : round ? Phase.WITHDRAW : Phase.DEPOSIT;
+		this.phase = !allDone(wears) ? Phase.WEAR : mix != null ? Phase.MIX : layout != null && layout.moving ? Phase.MOVE
+			: round ? Phase.WITHDRAW : Phase.DEPOSIT;
 	}
 
 	/**
@@ -550,82 +578,206 @@ public final class ChestProgress
 		return settled;
 	}
 
+	/** What {@link #topUp} makes of the take-out list. */
+	private static final class TopUp
+	{
+		final List<ChestPlan.Line> lines;
+		final Mix mix;
+
+		TopUp(List<ChestPlan.Line> lines, Mix mix)
+		{
+			this.lines = lines;
+			this.mix = mix;
+		}
+	}
+
 	/**
 	 * The take-out list with its potions swapped for fuller doses. A potion line's number is made up of the
 	 * best doses to be had, on you or in the storage (a carried dose over the same dose in there), so when the
 	 * storage holds a fuller dose than one you carry, the carried one goes in (a deposit added to {@code putIn},
 	 * reading "Overload (1/2)") and the line takes only doses from the fullest kept down, so "Overload, 1" with
-	 * an Overload (2) carried and a (4) in the storage is put the (2) in, take the (4) out. Lines of the same
-	 * name pool their numbers. A line changes only when a swap comes of it, only when all its items are potions,
-	 * and only once the storage has been seen.
+	 * an Overload (2) carried and a (4) in the storage is put the (2) in, take the (4) out. A carried dose
+	 * below the ones kept goes in whether or not something comes out for it. Lines of the same name pool their numbers.
+	 *
+	 * <p>When the fullest doses to be had are fewer than the line wants, partial doses are decanted: two partial
+	 * doses carried are a {@link Mix} (the smaller to use on the larger) before anything else; with one or none
+	 * carried, the partial doses in the storage that make up the difference are a withdrawal added to the end
+	 * of the list (reading "Overload (1/3)"), as long as the inventory has a slot for them. Once no mixing
+	 * helps, the swap above puts what's left over back in.
+	 *
+	 * <p>A line changes only when a swap or a mix comes of it, only when all its items are potions, and only
+	 * once the storage has been seen.
 	 */
-	static List<ChestPlan.Line> topUp(List<ChestPlan.Line> takeOut, List<ChestPlan.Line> putIn, Map<String, Integer> inventory,
-		Map<String, Integer> worn, Map<String, Integer> storage)
+	static TopUp topUp(List<ChestPlan.Line> takeOut, List<ChestPlan.Line> putIn, Map<String, Integer> inventory,
+		Map<String, Integer> worn, Map<String, Integer> storage, Carried carried)
 	{
 		if (storage == null)
 		{
-			return takeOut;
+			return new TopUp(takeOut, null);
 		}
 		List<ChestPlan.Line> lines = new ArrayList<>(takeOut);
 		Set<String> seen = new java.util.HashSet<>();
-		for (int i = 0; i < lines.size(); i++)
+		Mix mix = null;
+		boolean space = carried == null;
+		for (int slot = 0; carried != null && slot < carried.names.length; slot++)
 		{
-			ChestPlan.Line line = lines.get(i);
+			space |= carried.names[slot] == null;
+		}
+		for (int i = 0; i < takeOut.size(); i++)
+		{
+			ChestPlan.Line line = takeOut.get(i);
 			if (!swappable(line) || !seen.add(line.name.toLowerCase(java.util.Locale.ROOT)) || count(line, worn) > 0)
 			{
 				continue;
 			}
 			List<Integer> group = new ArrayList<>();
 			int want = 0;
-			for (int j = i; j < lines.size(); j++)
+			for (int j = i; j < takeOut.size(); j++)
 			{
-				if (swappable(lines.get(j)) && lines.get(j).name.equalsIgnoreCase(line.name))
+				if (swappable(takeOut.get(j)) && takeOut.get(j).name.equalsIgnoreCase(line.name))
 				{
 					group.add(j);
-					want += lines.get(j).count;
+					want += takeOut.get(j).count;
 				}
 			}
-			List<Integer> carried = doses(line, inventory);
+			List<Integer> held = doses(line, inventory);
 			List<Integer> stored = doses(line, storage);
-			if (carried == null || stored == null || stored.isEmpty())
+			if (held == null || stored == null || held.isEmpty() && stored.isEmpty())
 			{
 				continue;
 			}
-			// the best doses of the lot: the fullest first, a carried one before the same dose in the storage
+			// the best doses of the lot as they are: the fullest first, a carried one before the same dose in the storage
 			int c = 0;
 			int s = 0;
 			int floor = -1;
-			for (int u = 0; u < want && (c < carried.size() || s < stored.size()); u++)
+			int kept = 0;
+			for (int u = 0; u < want && (c < held.size() || s < stored.size()); u++)
 			{
-				if (s >= stored.size() || (c < carried.size() && carried.get(c) >= stored.get(s)))
+				if (s >= stored.size() || (c < held.size() && held.get(c) >= stored.get(s)))
 				{
-					floor = carried.get(c++);
+					floor = held.get(c++);
 				}
 				else
 				{
 					floor = stored.get(s++);
 				}
+				kept += floor;
 			}
-			if (s == 0 || c >= carried.size() || carried.get(c) >= floor)
+			// and the best with the partial doses decanted: everything, up to four a potion
+			int total = 0;
+			int fours = 0;
+			for (List<Integer> some : java.util.Arrays.asList(held, stored))
+			{
+				for (int dose : some)
+				{
+					total += dose;
+					fours += dose == FULL ? 1 : 0;
+				}
+			}
+			if (Math.min(total, FULL * want) > kept)
+			{
+				List<Integer> partial = new ArrayList<>();
+				int carriedDoses = 0;
+				for (int dose : held)
+				{
+					if (dose < FULL)
+					{
+						partial.add(dose);
+						carriedDoses += dose;
+					}
+				}
+				if (partial.size() >= 2)
+				{
+					if (mix == null)
+					{
+						mix = mix(line, carried, inventory, partial.get(partial.size() - 1), partial.get(0));
+					}
+					continue;
+				}
+				int needed = Math.min(total, FULL * want) - FULL * Math.min(want, fours);
+				int take = 0;
+				int lowest = FULL;
+				StringBuilder which = new StringBuilder();
+				for (int dose : stored)
+				{
+					if (dose < FULL && carriedDoses < needed)
+					{
+						carriedDoses += dose;
+						take++;
+						which.insert(0, dose != lowest ? dose + (which.length() == 0 ? "" : "/") : "");
+						lowest = dose;
+					}
+				}
+				if (take > 0 && space)
+				{
+					lines.add(line.doses(lowest, FULL - 1, line.name + " (" + which + ")", take, true));
+					continue;
+				}
+			}
+			if (c >= held.size() || held.get(c) >= floor)
 			{
 				continue;
 			}
 			StringBuilder out = new StringBuilder();
-			for (int k = carried.size() - 1; k >= c; k--)
+			for (int k = held.size() - 1; k >= c; k--)
 			{
-				if (out.length() == 0 || !carried.get(k).equals(carried.get(k + 1)))
+				if (out.length() == 0 || !held.get(k).equals(held.get(k + 1)))
 				{
-					out.append(out.length() == 0 ? "" : "/").append(carried.get(k));
+					out.append(out.length() == 0 ? "" : "/").append(held.get(k));
 				}
 			}
 			for (int j : group)
 			{
-				ChestPlan.Line member = lines.get(j);
+				ChestPlan.Line member = takeOut.get(j);
 				lines.set(j, member.doses(floor, Integer.MAX_VALUE, null, member.count, member.counted));
 			}
 			putIn.add(line.doses(0, floor - 1, line.name + " (" + out + ")", 1, false));
 		}
-		return lines;
+		return new TopUp(lines, mix);
+	}
+
+	/** The most doses a potion holds. */
+	static final int FULL = 4;
+
+	/**
+	 * Two partial doses of a line's potion carried, the first to use on the second. With the slots known they're
+	 * the first two slots holding one, the later used on the earlier: the game fills the potion used on, and the
+	 * earlier slot is the one the plan put the potion in, so the full dose ends up where it belongs. Without the
+	 * slots, the smaller dose used on the larger.
+	 */
+	private static Mix mix(ChestPlan.Line line, Carried carried, Map<String, Integer> inventory, int smallest, int largest)
+	{
+		if (carried != null)
+		{
+			int to = -1;
+			for (int slot = 0; slot < carried.names.length; slot++)
+			{
+				String name = carried.names[slot];
+				if (name == null || !line.matches(name) || dose(name) >= FULL)
+				{
+					continue;
+				}
+				if (to < 0)
+				{
+					to = slot;
+				}
+				else
+				{
+					return new Mix(name, carried.names[to], slot, to);
+				}
+			}
+		}
+		String from = null;
+		String to = null;
+		for (String name : inventory.keySet())
+		{
+			if (line.matches(name))
+			{
+				from = from == null && dose(name) == smallest ? name : from;
+				to = to == null && dose(name) == largest ? name : to;
+			}
+		}
+		return new Mix(from, to, -1, -1);
 	}
 
 	/** Whether {@link #topUp} may change a take-out line: one item to carry, as written. */
@@ -820,7 +972,14 @@ public final class ChestProgress
 
 	public boolean isDone()
 	{
-		return allDone(wears) && (layout != null ? layout.done() : allDone(deposits) && outOfOrder.isEmpty() && allDone(withdrawals));
+		return allDone(wears) && mix == null
+			&& (layout != null ? layout.done() : allDone(deposits) && outOfOrder.isEmpty() && allDone(withdrawals));
+	}
+
+	/** The potion to use on another right now, null in any other phase. */
+	public Mix mix()
+	{
+		return phase == Phase.MIX ? mix : null;
 	}
 
 	/**
@@ -967,13 +1126,13 @@ public final class ChestProgress
 	 */
 	public int moveFrom()
 	{
-		return phase == Phase.MOVE ? layout.moves.get(0)[0] : -1;
+		return phase == Phase.MOVE ? layout.moves.get(0)[0] : phase == Phase.MIX ? mix.fromSlot : -1;
 	}
 
-	/** The inventory slot {@link #moveFrom} goes to. */
+	/** The inventory slot {@link #moveFrom} goes to. In the {@link Phase#MIX} phase the two are the potions, the one to use first. */
 	public int moveTo()
 	{
-		return phase == Phase.MOVE ? layout.moves.get(0)[1] : -1;
+		return phase == Phase.MOVE ? layout.moves.get(0)[1] : phase == Phase.MIX ? mix.toSlot : -1;
 	}
 
 	/** The name of the item in an inventory slot, null for an empty one or without the slots. */
