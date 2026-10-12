@@ -101,7 +101,7 @@ public interface CoxStoragePlannerConfig extends Config
 	)
 	default boolean chestScrollHint()
 	{
-		return true;
+		return false;
 	}
 
 	@ConfigItem(
@@ -113,7 +113,7 @@ public interface CoxStoragePlannerConfig extends Config
 	)
 	default boolean chestMarkers()
 	{
-		return true;
+		return false;
 	}
 
 	@ConfigItem(
@@ -125,7 +125,7 @@ public interface CoxStoragePlannerConfig extends Config
 	)
 	default boolean chestPutBack()
 	{
-		return true;
+		return false;
 	}
 
 	@ConfigItem(
@@ -201,7 +201,7 @@ public interface CoxStoragePlannerConfig extends Config
 	)
 	default boolean chestGlowPulse()
 	{
-		return true;
+		return false;
 	}
 
 	@ConfigItem(
@@ -213,7 +213,7 @@ public interface CoxStoragePlannerConfig extends Config
 	)
 	default boolean chestGlowPath()
 	{
-		return true;
+		return false;
 	}
 
 	@ConfigItem(

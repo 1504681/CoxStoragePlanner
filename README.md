@@ -49,13 +49,13 @@ The storage unit in your room carries a `?` while its chest still has something 
 
 ![An ordered withdrawal with Lines between clicks on](docs/lines-between-clicks.gif)
 
-*Ordered withdrawal with the* Lines between clicks *setting on: the numbered orbs run green to red and the arrows join them up.*
+*Ordered withdrawal with the* Lines between clicks *setting on (off by default): the numbered orbs run green to red and the arrows join them up.*
 
 ## Organise the inventory
 
-On by default. With an ordered list, click 1 belongs in the first inventory slot the plan may use, click 2 in the next, and so on (slots holding something neither list mentions are skipped). An item of the list sitting in the wrong slot glows to go back in and comes out again in its turn (`redeposit: Elder maul (wrong slot)` in the sidebar). Two neighbours the wrong way round, and the end of the list already carried in order further down, are left alone.
+Off by default. With an ordered list, click 1 belongs in the first inventory slot the plan may use, click 2 in the next, and so on (slots holding something neither list mentions are skipped). An item of the list sitting in the wrong slot glows to go back in and comes out again in its turn (`redeposit: Elder maul (wrong slot)` in the sidebar). Two neighbours the wrong way round, and the end of the list already carried in order further down, are left alone.
 
-A private storage holds 25 items (tiny) to 120 (massive), one slot per item or stack. When not everything fits, the plugin works in rounds: deposit what fits, withdraw what those holes ask for, deposit the rest. While it's that tight an item in the wrong slot gets a drag arrow to its slot instead of a redeposit, and with the storage full up to four items come out into empty slots to make room. The sidebar says what to do now (`Now: deposit what's outlined`), the free slots and the drags. Turn the setting off and none of this happens: no arrows, no redeposits, the list only counts what you carry.
+A private storage holds 25 items (tiny) to 120 (massive), one slot per item or stack. When not everything fits, the plugin works in rounds: deposit what fits, withdraw what those holes ask for, deposit the rest. While it's that tight an item in the wrong slot gets a drag arrow to its slot instead of a redeposit, and with the storage full up to four items come out into empty slots to make room. The sidebar says what to do now (`Now: deposit what's outlined`), the free slots and the drags. With the setting off none of this happens: no arrows, no redeposits, the list only counts what you carry.
 
 ## Supplies tracker
 
@@ -71,14 +71,14 @@ A grid below shows what each party member holds (needs the core Party plugin): `
 | Glow items | on |
 | Ordered withdrawal glow | next few clicks, biggest first |
 | Clicks shown | 4 |
-| Light the scroll arrow | on |
-| ? and tick over the storage unit | on |
-| Organise the inventory | on |
+| Light the scroll arrow | off |
+| ? and tick over the storage unit | off |
+| Organise the inventory | off |
 | Separate chests for solo raids | off |
 | Glow colour / next click colour / end colour / wear colour | yellow / green / red / purple |
 | Outline thickness | 1.5 |
-| Pulse | on |
-| Lines between clicks | on |
+| Pulse | off |
+| Lines between clicks | off |
 | **Sidebar** | |
 | Hide away from the Chambers | on |
 | Always hide the sidebar icon | off |
@@ -90,6 +90,9 @@ A grid below shows what each party member holds (needs the core Party plugin): `
 | Count split overloads | on |
 
 ## Changelog
+
+1.3.20
+- Quieter out of the box: *Pulse*, *Lines between clicks*, *Light the scroll arrow*, *? and tick over the storage unit* and *Organise the inventory* are off by default. The glow stays. Anyone who set them keeps their settings.
 
 1.3.19
 - *Swap for fuller potions* decants: short of full doses, the partial doses in the storage are withdrawn, an arrow shows which potion to use on which, and what's left over goes back in. A carried dose below the ones kept goes in even when nothing comes out for it.
